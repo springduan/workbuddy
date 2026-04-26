@@ -20,6 +20,92 @@ import { SCHEDULE_CONFIG } from '@/types';
 // 生成唯一ID
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+// 智能解析时间格式，支持多种输入并标准化为 HH:MM
+const normalizeTime = (raw: string): string | null => {
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // Excel 日期序列号（0.388888... 表示小数时间部分）
+  if (/^\d+(\.\d+)?$/.test(str) && !/^\d{4}$/.test(str)) {
+    const num = parseFloat(str);
+    if (num > 0 && num < 1) {
+      const totalMinutes = Math.round(num * 24 * 60);
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  // HH:MM:SS 或 H:MM:SS
+  let match = str.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (match) {
+    const h = parseInt(match[1]);
+    const m = parseInt(match[2]);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  // HH:MM 或 H:MM
+  match = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (match) {
+    const h = parseInt(match[1]);
+    const m = parseInt(match[2]);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  // HH时MM分 或 H时M分 等中文格式
+  match = str.match(/^(\d{1,2})\s*[时点:：]\s*(\d{1,2})\s*分?$/);
+  if (match) {
+    const h = parseInt(match[1]);
+    const m = parseInt(match[2]);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  return null;
+};
+
+// 智能解析日期格式，支持多种输入并标准化为 YYYY-MM-DD
+const normalizeDate = (raw: string): string | null => {
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // 已是标准格式 YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+  // YYYY/MM/DD
+  let match = str.match(/^(\d{4})[\/](\d{1,2})[\/](\d{1,2})$/);
+  if (match) {
+    return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  }
+
+  // YYYY年MM月DD日
+  match = str.match(/^(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日?$/);
+  if (match) {
+    return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+  }
+
+  // Excel 日期序列号（如 44927 表示 2025-01-01）
+  if (/^\d{4,5}$/.test(str)) {
+    const num = parseInt(str);
+    if (num > 40000 && num < 60000) {
+      // Excel 日期起始点为 1900-01-01，但有一个闰年 bug（1900-02-29 不存在但 Excel 认为存在）
+      const epoch = new Date(1899, 11, 30);
+      const date = new Date(epoch.getTime() + num * 86400000);
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  return null;
+};
+
 // 模拟排班任务结构
 interface SimTask {
   id: string;
@@ -256,8 +342,8 @@ export function Dashboard({
           const peopleCount = parseInt(row['人数'] || row['peopleCount'] || '1') || 1;
           const transportType = row['入黔方式'] || row['transportType'] || '飞机';
           const flightNumber = String(row['航班号'] || row['高铁班次'] || row['flightNumber'] || '').trim();
-          const arrivalDate = String(row['落地日期'] || row['arrivalDate'] || '').trim();
-          const arrivalTime = String(row['落地时间'] || row['arrivalTime'] || '').trim();
+          let arrivalDate = String(row['落地日期'] || row['arrivalDate'] || '').trim();
+          let arrivalTime = String(row['落地时间'] || row['arrivalTime'] || '').trim();
           const salesman = String(row['业务员'] || row['salesman'] || '').trim();
           const salesmanPhone = String(row['业务员电话'] || row['salesmanPhone'] || '').trim();
           const company = String(row['业务员所属公司'] || row['company'] || '').trim();
@@ -267,14 +353,20 @@ export function Dashboard({
             errors.push('缺少姓名');
           }
 
-          // 验证日期格式
-          if (arrivalDate && !/^\d{4}-\d{2}-\d{2}$/.test(arrivalDate)) {
-            errors.push('日期格式错误（应为YYYY-MM-DD）');
+          // 智能解析日期格式
+          const normalizedDate = normalizeDate(arrivalDate);
+          if (arrivalDate && !normalizedDate) {
+            errors.push('日期格式无法识别（支持：2025-01-15、2025/01/15、2025年1月15日）');
+          } else if (normalizedDate) {
+            arrivalDate = normalizedDate;
           }
 
-          // 验证时间格式
-          if (arrivalTime && !/^\d{1,2}:\d{2}$/.test(arrivalTime)) {
-            errors.push('时间格式错误（应为HH:MM）');
+          // 智能解析时间格式
+          const normalizedTime = normalizeTime(arrivalTime);
+          if (arrivalTime && !normalizedTime) {
+            errors.push('时间格式无法识别（支持：9:20、09:20、9:20:00、9时20分）');
+          } else if (normalizedTime) {
+            arrivalTime = normalizedTime;
           }
 
           // 验证入黔方式
