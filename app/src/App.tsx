@@ -8,6 +8,7 @@ import { CustomerList } from '@/pages/CustomerList';
 import { VehicleList } from '@/pages/VehicleList';
 import { Schedule } from '@/pages/Schedule';
 import { DashboardKanban } from '@/pages/DashboardKanban';
+import { ConfigSettings } from '@/pages/ConfigSettings';
 
 function App() {
   const {
@@ -16,6 +17,7 @@ function App() {
     customers,
     vehicles,
     scheduleTasks,
+    scheduleConfig,
     login,
     logout,
     addCustomer,
@@ -34,6 +36,8 @@ function App() {
     markCustomerCancelled,
     restoreCustomerNormal,
     updateTaskStatus,
+    saveScheduleConfig,
+    resetScheduleConfig,
   } = useAppData();
 
   const stats = getStats();
@@ -128,6 +132,16 @@ function App() {
                 vehicles={vehicles}
                 customerGroups={groupCustomers(customers)}
                 onUpdateTaskStatus={updateTaskStatus}
+              />
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <ConfigSettings
+                currentConfig={scheduleConfig}
+                onSave={saveScheduleConfig}
+                onReset={resetScheduleConfig}
               />
             }
           />

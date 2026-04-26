@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Customer, Vehicle, ScheduleTask, User, CustomerGroup, StatusLog, GuestStatus } from '@/types';
-import { SCHEDULE_CONFIG } from '@/types';
+import type { Customer, Vehicle, ScheduleTask, User, CustomerGroup, StatusLog, GuestStatus, ScheduleConfig } from '@/types';
+import { DEFAULT_SCHEDULE_CONFIG, updateScheduleConfig, SCHEDULE_CONFIG } from '@/types';
 
 // 本地存储键名
 const STORAGE_KEYS = {
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   SCHEDULE: 'scheduler_schedule',
   CURRENT_USER: 'scheduler_current_user',
   STATUS_LOGS: 'scheduler_status_logs',
+  SCHEDULE_CONFIG: 'scheduler_config',
 };
 
 // 初始管理员账户
@@ -31,6 +32,7 @@ export function useAppData() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [scheduleTasks, setScheduleTasks] = useState<ScheduleTask[]>([]);
   const [statusLogs, setStatusLogs] = useState<StatusLog[]>([]);
+  const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>(DEFAULT_SCHEDULE_CONFIG);
   const [isLoading, setIsLoading] = useState(true);
 
   // 初始化加载数据
@@ -47,11 +49,17 @@ export function useAppData() {
     const storedSchedule = localStorage.getItem(STORAGE_KEYS.SCHEDULE);
     const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
     const storedLogs = localStorage.getItem(STORAGE_KEYS.STATUS_LOGS);
+    const storedConfig = localStorage.getItem(STORAGE_KEYS.SCHEDULE_CONFIG);
 
     if (storedCustomers) setCustomers(JSON.parse(storedCustomers));
     if (storedVehicles) setVehicles(JSON.parse(storedVehicles));
     if (storedSchedule) setScheduleTasks(JSON.parse(storedSchedule));
     if (storedLogs) setStatusLogs(JSON.parse(storedLogs));
+    if (storedConfig) {
+      const config = JSON.parse(storedConfig);
+      setScheduleConfig(config);
+      updateScheduleConfig(config);
+    }
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setCurrentUser(user);
@@ -378,10 +386,6 @@ export function useAppData() {
       vehicleStats.set(v.id, { tripCount: 0, flightCount: 0, trainCount: 0 });
     });
 
-    // 计算目标趟次（用于均衡分配参考）
-    const totalTasks = customerGroups.reduce((sum, g) => sum + g.vehicleCount, 0);
-    const avgTripsPerVehicle = totalTasks / availableVehicles.length;
-
     // 按到达时间排序客户组
     const sortedGroups = [...customerGroups].sort((a, b) => {
       const dateCompare = a.arrivalDate.localeCompare(b.arrivalDate);
@@ -419,20 +423,49 @@ export function useAppData() {
           // 检查趟次上限
           if (stats.tripCount >= SCHEDULE_CONFIG.maxTripsPerVehicle) continue;
 
-          // 检查时间间隔
+          // 检查时间间隔 - 需要与时间上最近的前后任务都检查
           const vehicleTasks = newTasks.filter(t => t.vehicleId === vehicle.id);
           let timeIntervalOk = true;
           if (vehicleTasks.length > 0) {
-            const lastTask = vehicleTasks[vehicleTasks.length - 1];
-            const lastPickupTimeParts = lastTask.pickupTime.split(' ');
-            const lastPickupTimePart = lastPickupTimeParts[lastPickupTimeParts.length - 1];
-            const [lastH, lastM] = lastPickupTimePart.split(':').map(Number);
-            const lastPickupMinutes = lastH * 60 + lastM;
-            const lastPickupDuration = lastTask.customers.some(c => c.transportType === '飞机')
-              ? SCHEDULE_CONFIG.flightPickupDuration
-              : SCHEDULE_CONFIG.trainPickupDuration;
-            if (pickupTimeMinutes - lastPickupMinutes < lastPickupDuration) {
-              timeIntervalOk = false;
+            // 将已有任务的出发时间转为分钟数
+            const existingPickupMinutes = vehicleTasks.map(t => {
+              const parts = t.pickupTime.split(' ');
+              const timePart = parts[parts.length - 1];
+              const [h, m] = timePart.split(':').map(Number);
+              return {
+                minutes: h * 60 + m,
+                duration: t.customers.some(c => c.transportType === '飞机')
+                  ? SCHEDULE_CONFIG.flightPickupDuration
+                  : SCHEDULE_CONFIG.trainPickupDuration,
+              };
+            });
+
+            // 找出当前任务时间之前的最近一趟（后向检查）
+            // 当前出发时间 - 前一趟出发时间 >= 前一趟往返耗时
+            const earlierTasks = existingPickupMinutes
+              .filter(t => t.minutes <= pickupTimeMinutes)
+              .sort((a, b) => b.minutes - a.minutes); // 最近的排前面
+            
+            if (earlierTasks.length > 0) {
+              const nearestEarlier = earlierTasks[0];
+              if (pickupTimeMinutes - nearestEarlier.minutes < nearestEarlier.duration) {
+                timeIntervalOk = false;
+              }
+            }
+
+            // 找出当前任务时间之后的最近一趟（前向检查）
+            // 后一趟出发时间 - 当前出发时间 >= 当前往返耗时
+            if (timeIntervalOk) {
+              const laterTasks = existingPickupMinutes
+                .filter(t => t.minutes > pickupTimeMinutes)
+                .sort((a, b) => a.minutes - b.minutes); // 最近的排前面
+              
+              if (laterTasks.length > 0) {
+                const nearestLater = laterTasks[0];
+                if (nearestLater.minutes - pickupTimeMinutes < tripDuration) {
+                  timeIntervalOk = false;
+                }
+              }
             }
           }
 
@@ -606,6 +639,18 @@ export function useAppData() {
     saveVehicles([]);
   }, [saveVehicles]);
 
+  // 保存排班配置
+  const saveScheduleConfig = useCallback((config: ScheduleConfig) => {
+    setScheduleConfig(config);
+    updateScheduleConfig(config);
+    localStorage.setItem(STORAGE_KEYS.SCHEDULE_CONFIG, JSON.stringify(config));
+  }, []);
+
+  // 重置排班配置为默认值
+  const resetScheduleConfig = useCallback(() => {
+    saveScheduleConfig(DEFAULT_SCHEDULE_CONFIG);
+  }, [saveScheduleConfig]);
+
   // 统计数据
   const getStats = useCallback(() => {
     // 按客人状态统计
@@ -677,6 +722,7 @@ export function useAppData() {
     vehicles,
     scheduleTasks,
     statusLogs,
+    scheduleConfig,
     isLoading,
     login,
     logout,
@@ -698,6 +744,8 @@ export function useAppData() {
     restoreCustomerNormal,
     addStatusLog,
     updateTaskStatus,
+    saveScheduleConfig,
+    resetScheduleConfig,
   };
 }
 

@@ -128,9 +128,10 @@ export function DashboardKanban({
     const [hour, min] = pickupTime.split(':').map(Number);
     const startMinutes = hour * 60 + min;
 
-    // 结束时间 = 到达时间 + 30分钟（机场停留）
-    const [endHour, endMin] = task.arrivalTime.split(':').map(Number);
-    const endMinutes = endHour * 60 + endMin + 30;
+    // 结束时间使用 returnTime 字段（实际返回时间 = 出发时间 + 往返耗时）
+    const returnTime = task.returnTime.split(' ')[1] || '00:00';
+    const [endHour, endMin] = returnTime.split(':').map(Number);
+    const endMinutes = endHour * 60 + endMin;
 
     // 转换百分比
     const dayStartMinutes = 5 * 60; // 5:00
@@ -142,7 +143,7 @@ export function DashboardKanban({
 
     return {
       left: `${Math.max(0, left)}%`,
-      width: `${Math.min(100 - left, width)}%`,
+      width: `${Math.min(100 - left, Math.max(0.5, width))}%`,
     };
   };
 
@@ -962,6 +963,10 @@ function TaskDetail({
         <div className="flex justify-between">
           <span className="text-gray-500 font-medium">到达时间</span>
           <span className="font-mono font-semibold text-gray-800">{task.arrivalTime}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500 font-medium">返回时间</span>
+          <span className="font-mono font-semibold text-gray-600">{task.returnTime.split(' ')[1] || '-'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-gray-500 font-medium">接机地点</span>

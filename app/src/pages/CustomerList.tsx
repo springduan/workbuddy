@@ -184,9 +184,13 @@ export function CustomerList({
 
   // 排序（按落地日期和时间）
   const sortedCustomers = [...filteredCustomers].sort((a, b) => {
-    const dateCompare = a.arrivalDate.localeCompare(b.arrivalDate);
+    const dateA = String(a.arrivalDate || '');
+    const dateB = String(b.arrivalDate || '');
+    const dateCompare = dateA.localeCompare(dateB);
     if (dateCompare !== 0) return dateCompare;
-    return a.arrivalTime.localeCompare(b.arrivalTime);
+    const timeA = String(a.arrivalTime || '');
+    const timeB = String(b.arrivalTime || '');
+    return timeA.localeCompare(timeB);
   });
 
   // 获取交通工具图标

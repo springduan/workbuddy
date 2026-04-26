@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,6 +27,7 @@ const navItems = [
   { path: '/vehicles', label: '车辆管理', icon: Car },
   { path: '/schedule', label: '排班方案', icon: CalendarClock },
   { path: '/vehicle-timeline', label: '调度看板', icon: BarChart3 },
+  { path: '/settings', label: '配置', icon: Settings },
 ];
 
 export function Layout({ children, onLogout, userName }: LayoutProps) {

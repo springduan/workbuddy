@@ -29,6 +29,7 @@ import {
 import type { ScheduleTask, Vehicle, CustomerGroup } from '@/types';
 import { SCHEDULE_CONFIG } from '@/types';
 import { toast } from 'sonner';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 interface ScheduleProps {
   scheduleTasks: ScheduleTask[];
@@ -109,26 +110,6 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
     toast.success('排班已清除');
   };
 
-  // 按车辆分组排班任务
-  const tasksByVehicle = scheduleTasks.reduce((acc, task) => {
-    const vehicleId = task.vehicleId;
-    if (!acc[vehicleId]) {
-      acc[vehicleId] = [];
-    }
-    acc[vehicleId].push(task);
-    return acc;
-  }, {} as Record<string, ScheduleTask[]>);
-
-  // 按日期分组
-  const tasksByDate = scheduleTasks.reduce((acc, task) => {
-    const date = task.pickupTime.split(' ')[0];
-    if (!acc[date]) {
-      acc[date] = [];
-    }
-    acc[date].push(task);
-    return acc;
-  }, {} as Record<string, ScheduleTask[]>);
-
   // 获取交通工具图标
   const getTransportIcon = (type: string) => {
     switch (type) {
@@ -143,6 +124,9 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
 
   // 统计（基于过滤后数据）
   const scheduledCustomerIds = new Set(filteredTasks.flatMap(t => t.customers.map(c => c.id)));
+  const pendingGroups = customerGroups.filter((g) =>
+    !g.customers.some(c => scheduledCustomerIds.has(c.id))
+  );
   const stats = {
     totalTasks: filteredTasks.length,
     totalVehicles: Object.keys(filteredTasksByVehicle).length,
@@ -152,14 +136,60 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
     scheduledPeople: filteredTasks.reduce((sum, t) =>
       sum + t.customers.reduce((s, c) => s + c.peopleCount, 0), 0
     ),
-    pendingCustomerGroups: customerGroups.filter((g) =>
-      !g.customers.some(c => scheduledCustomerIds.has(c.id))
-    ).length,
-    pendingPeople: customerGroups
-      .filter((g) => !g.customers.some(c => scheduledCustomerIds.has(c.id)))
-      .reduce((sum, g) => sum + g.customers.reduce((s, c) => s + c.peopleCount, 0), 0
-    ),
+    pendingCustomerGroups: pendingGroups.length,
+    pendingPeople: pendingGroups.reduce((sum, g) => sum + g.customers.reduce((s, c) => s + c.peopleCount, 0), 0),
   };
+
+  // 计算待安排原因
+  const getPendingReasons = () => {
+    const reasons: string[] = [];
+    const totalGroups = customerGroups.length;
+    const hasSchedule = scheduleTasks.length > 0;
+
+    if (!hasSchedule) {
+      reasons.push('尚未生成排班，请点击「智能排班」按钮');
+    }
+    if (totalGroups === 0) {
+      reasons.push('暂无需要安排的客户');
+    }
+    if (vehicles.length === 0) {
+      reasons.push('未录入车辆信息，无法排班');
+    }
+    if (hasSchedule && pendingGroups.length > 0 && totalGroups > 0) {
+      // 已生成排班但仍有未安排的——列出具体客户
+      const names = pendingGroups
+        .slice(0, 5)
+        .map(g => {
+          const customer = g.customers[0];
+          return `${customer.name}（${customer.arrivalDate} ${customer.arrivalTime} ${customer.transportType}）`;
+        })
+        .join('；');
+      const totalPendingPeople = pendingGroups.reduce((sum, g) => sum + g.customers.reduce((s, c) => s + c.peopleCount, 0), 0);
+      reasons.push(`以下客户未排入：${names}${pendingGroups.length > 5 ? `等${pendingGroups.length}组` : ''}`);
+      reasons.push(`共 ${totalPendingPeople} 人未安排接送`);
+
+      // 分析具体原因
+      const usedVehicleIds = new Set(scheduleTasks.map(t => t.vehicleId));
+      const allVehicleIds = new Set(vehicles.map(v => v.id));
+      const unusedVehicleIds = [...allVehicleIds].filter(id => !usedVehicleIds.has(id));
+      
+      if (unusedVehicleIds.length > 0) {
+        reasons.push(`有 ${unusedVehicleIds.length} 辆车未参与排班（可能趟次已满或时间冲突）`);
+      } else {
+        // 所有车辆都在使用，可能是全部趟次用完
+        const maxTripsPerVehicle = SCHEDULE_CONFIG.maxTripsPerVehicle;
+        const totalCapacity = vehicles.length * maxTripsPerVehicle;
+        if (scheduleTasks.length >= totalCapacity) {
+          reasons.push(`所有 ${vehicles.length} 辆车均已达最大趟次限制（${maxTripsPerVehicle}趟）`);
+        } else {
+          reasons.push('可能与现有任务存在时间间隔冲突');
+        }
+      }
+    }
+    return reasons;
+  };
+
+  const pendingReasons = stats.pendingCustomerGroups > 0 ? getPendingReasons() : [];
 
   return (
     <div className="space-y-6">
@@ -220,13 +250,41 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
           icon={CheckCircle}
           color="green"
         />
-        <StatCard
-          title="待安排客户"
-          value={stats.pendingCustomerGroups}
-          subtitle={`${stats.pendingPeople} 人`}
-          icon={Clock}
-          color="orange"
-        />
+        {pendingReasons.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help">
+                <StatCard
+                  title="待安排客户"
+                  value={stats.pendingCustomerGroups}
+                  subtitle={`${stats.pendingPeople} 人`}
+                  icon={Clock}
+                  color="orange"
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent
+              side="bottom"
+              sideOffset={8}
+              className="bg-white text-gray-700 border border-gray-200 shadow-lg max-w-xs"
+            >
+              <div className="space-y-1.5">
+                <p className="font-medium text-orange-600 text-xs">待安排原因：</p>
+                {pendingReasons.map((reason, idx) => (
+                  <p key={idx} className="text-xs leading-relaxed">{reason}</p>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <StatCard
+            title="待安排客户"
+            value={stats.pendingCustomerGroups}
+            subtitle={`${stats.pendingPeople} 人`}
+            icon={Clock}
+            color="orange"
+          />
+        )}
         <StatCard
           title="延误客户"
           value={delayedCount}
@@ -356,6 +414,7 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                           <TableHead>趟次</TableHead>
                           <TableHead>出发时间</TableHead>
                           <TableHead>到达时间</TableHead>
+                          <TableHead>返回时间</TableHead>
                           <TableHead>接机地点</TableHead>
                           <TableHead>客户</TableHead>
                           <TableHead>交通</TableHead>
@@ -373,6 +432,9 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                             </TableCell>
                             <TableCell className="font-mono text-sm">
                               {task.arrivalTime}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm text-gray-600">
+                              {task.returnTime.split(' ')[1] || '-'}
                             </TableCell>
                             <TableCell>{task.pickupLocation}</TableCell>
                             <TableCell>
@@ -461,6 +523,7 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                           <TableHead>趟次</TableHead>
                           <TableHead>出发时间</TableHead>
                           <TableHead>到达时间</TableHead>
+                          <TableHead>返回时间</TableHead>
                           <TableHead>接机地点</TableHead>
                           <TableHead>客户信息</TableHead>
                           <TableHead>状态</TableHead>
@@ -494,6 +557,9 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                                 </TableCell>
                                 <TableCell className="font-mono">
                                   {task.arrivalTime}
+                                </TableCell>
+                                <TableCell className="font-mono text-gray-600">
+                                  {task.returnTime.split(' ')[1] || '-'}
                                 </TableCell>
                                 <TableCell>{task.pickupLocation}</TableCell>
                                 <TableCell>

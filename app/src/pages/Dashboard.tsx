@@ -24,14 +24,13 @@ const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9
 interface SimTask {
   id: string;
   customer: Customer;
-  pickupTimeMinutes: number; // 从0点开始的分钟数
-  arrivalTime: string;
+  pickupTimeMinutes: number; // 从0点开始的分钟数（出发时间）
   arrivalDate: string;
   transportType: string;
-  pickupDuration: number; // 接机耗时
+  tripDuration: number; // 该趟次的往返耗时（飞机150/高铁100）
 }
 
-// 预计用车计算算法 - 基于排班逻辑（考虑时间间隔、趟次限制和每车6人限制）
+// 预计用车计算算法 - 与实际排班算法保持完全一致
 const calculateEstimatedVehiclesFromStats = (customers: Customer[]) => {
   // 过滤需要用车的客户（排除取消、自驾）
   const customersNeedingVehicle = customers.filter(c =>
@@ -42,31 +41,51 @@ const calculateEstimatedVehiclesFromStats = (customers: Customer[]) => {
 
   if (customersNeedingVehicle.length === 0) return 0;
 
-  // 生成模拟任务（考虑每车6人限制，超过6人拆分为多个任务）
-  const tasks: SimTask[] = [];
-  
-  for (const customer of customersNeedingVehicle) {
-    const pickupDuration = customer.transportType === '飞机'
-      ? SCHEDULE_CONFIG.flightPickupDuration
-      : SCHEDULE_CONFIG.trainPickupDuration;
+  // 导入排班配置
+  const { flightDepartureLeadTime, trainDepartureLeadTime, flightPickupDuration, trainPickupDuration, maxPassengersPerVehicle, maxTripsPerVehicle } = SCHEDULE_CONFIG;
 
-    const [arrHour, arrMin] = customer.arrivalTime.split(':').map(Number);
+  // 生成模拟任务
+  const tasks: SimTask[] = [];
+
+  for (const customer of customersNeedingVehicle) {
+    // 出发提前量：飞机60分钟，高铁40分钟
+    const departureLeadTime = customer.transportType === '飞机'
+      ? flightDepartureLeadTime
+      : trainDepartureLeadTime;
+
+    // 完整往返耗时（趟次间隔）：飞机150分钟，高铁100分钟
+    const tripDuration = customer.transportType === '飞机'
+      ? flightPickupDuration
+      : trainPickupDuration;
+
+    // 处理延误客人
+    let effectiveArrivalTime = customer.arrivalTime || '';
+    let effectiveArrivalDate = customer.arrivalDate || '';
+    if (customer.guestStatus === 'delayed' && customer.actualArrivalTime) {
+      const parts = customer.actualArrivalTime.split(/[T\s]/);
+      effectiveArrivalDate = parts[0] || customer.arrivalDate || '';
+      effectiveArrivalTime = parts[1] || customer.arrivalTime || '';
+    }
+
+    // 跳过无效时间数据
+    if (!effectiveArrivalTime || typeof effectiveArrivalTime !== 'string') continue;
+
+    const [arrHour, arrMin] = String(effectiveArrivalTime).split(':').map(Number);
     const arrivalMinutes = arrHour * 60 + arrMin;
-    const pickupTimeMinutes = arrivalMinutes - pickupDuration;
+    const pickupTimeMinutes = arrivalMinutes - departureLeadTime;  // 出发时间 = 到达时间 - 出发提前量
 
     // 计算需要多少辆车（每车最多6人）
-    const vehicleCount = Math.ceil(customer.peopleCount / SCHEDULE_CONFIG.maxPassengersPerVehicle);
-    
+    const vehicleCount = Math.ceil(customer.peopleCount / maxPassengersPerVehicle);
+
     // 创建对应数量的任务
     for (let i = 0; i < vehicleCount; i++) {
       tasks.push({
         id: generateId(),
         customer,
         pickupTimeMinutes,
-        arrivalTime: customer.arrivalTime,
-        arrivalDate: customer.arrivalDate,
+        arrivalDate: effectiveArrivalDate,
         transportType: customer.transportType,
-        pickupDuration,
+        tripDuration,  // 该趟次自身的往返耗时
       });
     }
   }
@@ -75,40 +94,86 @@ const calculateEstimatedVehiclesFromStats = (customers: Customer[]) => {
   const sortedTasks = [...tasks].sort((a, b) => {
     const dateCompare = a.arrivalDate.localeCompare(b.arrivalDate);
     if (dateCompare !== 0) return dateCompare;
-    return a.arrivalTime.localeCompare(b.arrivalTime);
+    return a.pickupTimeMinutes - b.pickupTimeMinutes;
   });
 
-  // 分配车辆（考虑时间间隔和趟次限制）
-  const vehicleSchedule: Map<string, { lastEndMinutes: number; tripCount: number }> = new Map();
+  // 分配车辆 - 与实际排班算法完全一致
+  // 核心逻辑：遍历已分配车辆，检查趟次上限和时间间隔
+  // 时间间隔判断：需要与时间上最近的前后任务都检查
+  // 如果都不满足，则分配新车辆（模拟无限车辆池）
+  // 每辆车记录所有已分配任务的出发时间和往返耗时
+  const vehicleSchedule: Map<string, {
+    assignedTasks: { pickupMinutes: number; duration: number }[];
+    tripCount: number;
+    flightCount: number;
+    trainCount: number;
+  }> = new Map();
+  let vehicleCounter = 0;
 
   for (const task of sortedTasks) {
-    // 计算当前任务的结束时间
-    const taskEndMinutes = task.pickupTimeMinutes + task.pickupDuration + 30;
+    let assigned = false;
 
-    // 尝试找到可用的车辆
-    let assignedVehicle = false;
+    // 遍历所有已分配的车辆，找到第一个满足条件的
+    for (const [_vehicleId, vehicleInfo] of vehicleSchedule) {
+      // 检查趟次上限（每车最多4趟）
+      if (vehicleInfo.tripCount >= maxTripsPerVehicle) continue;
 
-    for (const [vehicleId, vehicleInfo] of vehicleSchedule) {
-      // 检查趟次上限
-      if (vehicleInfo.tripCount >= SCHEDULE_CONFIG.maxTripsPerVehicle) continue;
-
-      // 检查时间间隔是否满足
-      const interval = task.pickupTimeMinutes - vehicleInfo.lastEndMinutes;
+      // 检查时间间隔 - 与实际排班完全一致
+      // 后向检查：当前出发 - 之前最近出发 >= 之前最近一趟的往返耗时
+      // 前向检查：之后最近出发 - 当前出发 >= 当前往返耗时
+      let timeIntervalOk = true;
+      const earlierTasks = vehicleInfo.assignedTasks
+        .filter(t => t.pickupMinutes <= task.pickupTimeMinutes)
+        .sort((a, b) => b.pickupMinutes - a.pickupMinutes);
       
-      if (interval >= task.pickupDuration) {
+      if (earlierTasks.length > 0) {
+        const nearest = earlierTasks[0];
+        if (task.pickupTimeMinutes - nearest.pickupMinutes < nearest.duration) {
+          timeIntervalOk = false;
+        }
+      }
+
+      if (timeIntervalOk) {
+        const laterTasks = vehicleInfo.assignedTasks
+          .filter(t => t.pickupMinutes > task.pickupTimeMinutes)
+          .sort((a, b) => a.pickupMinutes - b.pickupMinutes);
+        
+        if (laterTasks.length > 0) {
+          const nearest = laterTasks[0];
+          if (nearest.pickupMinutes - task.pickupTimeMinutes < task.tripDuration) {
+            timeIntervalOk = false;
+          }
+        }
+      }
+
+      if (timeIntervalOk) {
         // 可以分配给这辆车
-        vehicleInfo.lastEndMinutes = taskEndMinutes;
+        vehicleInfo.assignedTasks.push({
+          pickupMinutes: task.pickupTimeMinutes,
+          duration: task.tripDuration,
+        });
         vehicleInfo.tripCount += 1;
-        assignedVehicle = true;
+        if (task.transportType === '飞机') {
+          vehicleInfo.flightCount += 1;
+        } else {
+          vehicleInfo.trainCount += 1;
+        }
+        assigned = true;
         break;
       }
     }
 
-    if (!assignedVehicle) {
+    if (!assigned) {
       // 需要新分配一辆车
-      vehicleSchedule.set(generateId(), {
-        lastEndMinutes: taskEndMinutes,
+      vehicleCounter++;
+      vehicleSchedule.set(`temp_v_${vehicleCounter}`, {
+        assignedTasks: [{
+          pickupMinutes: task.pickupTimeMinutes,
+          duration: task.tripDuration,
+        }],
         tripCount: 1,
+        flightCount: task.transportType === '飞机' ? 1 : 0,
+        trainCount: task.transportType === '高铁' ? 1 : 0,
       });
     }
   }
@@ -161,40 +226,123 @@ export function Dashboard({
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        const customers = jsonData.map((row: any) => ({
-          name: row['姓名'] || row['name'] || '',
-          phone: row['电话'] || row['phone'] || '',
-          type: (row['类型'] || row['type'] || '个人') === '家庭' ? '家庭' as const : '个人' as const,
-          peopleCount: parseInt(row['人数'] || row['peopleCount'] || '1') || 1,
-          transportType: (row['入黔方式'] || row['transportType'] || '飞机') as '高铁' | '飞机' | '自驾',
-          flightNumber: row['航班号'] || row['高铁班次'] || row['flightNumber'] || '',
-          arrivalDate: row['落地日期'] || row['arrivalDate'] || '',
-          arrivalTime: row['落地时间'] || row['arrivalTime'] || '',
-          salesman: row['业务员'] || row['salesman'] || '',
-          salesmanPhone: row['业务员电话'] || row['salesmanPhone'] || '',
-          company: row['业务员所属公司'] || row['company'] || '',
-          needVehicle: row['入黔方式'] !== '自驾',
-        }));
+        if (!jsonData || jsonData.length === 0) {
+          alert('⚠️ 导入失败：文件内容为空，请检查Excel文件是否有数据');
+          return;
+        }
 
-        const validCustomers = customers.filter(
-          (c) => c.name && c.arrivalDate && c.arrivalTime
-        );
+        // 检查表头是否有必要的字段
+        const firstRow = jsonData[0] as any;
+        const hasName = firstRow['姓名'] !== undefined || firstRow['name'] !== undefined;
+        const hasDate = firstRow['落地日期'] !== undefined || firstRow['arrivalDate'] !== undefined;
+        const hasTime = firstRow['落地时间'] !== undefined || firstRow['arrivalTime'] !== undefined;
+
+        if (!hasName && !hasDate && !hasTime) {
+          alert('⚠️ 导入失败：未找到必要的表头字段（姓名、落地日期、落地时间），请下载最新模板');
+          return;
+        }
+
+        const validCustomers: any[] = [];
+        const errorRows: { row: number; name: string; errors: string[] }[] = [];
+
+        jsonData.forEach((row: any, index: number) => {
+          const rowNum = index + 2; // Excel行号从2开始（1是表头）
+          const errors: string[] = [];
+
+          // 提取字段
+          const name = String(row['姓名'] || row['name'] || '').trim();
+          const phone = String(row['电话'] || row['phone'] || '').trim();
+          const type = row['类型'] || row['type'] || '个人';
+          const peopleCount = parseInt(row['人数'] || row['peopleCount'] || '1') || 1;
+          const transportType = row['入黔方式'] || row['transportType'] || '飞机';
+          const flightNumber = String(row['航班号'] || row['高铁班次'] || row['flightNumber'] || '').trim();
+          const arrivalDate = String(row['落地日期'] || row['arrivalDate'] || '').trim();
+          const arrivalTime = String(row['落地时间'] || row['arrivalTime'] || '').trim();
+          const salesman = String(row['业务员'] || row['salesman'] || '').trim();
+          const salesmanPhone = String(row['业务员电话'] || row['salesmanPhone'] || '').trim();
+          const company = String(row['业务员所属公司'] || row['company'] || '').trim();
+
+          // 验证必填字段
+          if (!name) {
+            errors.push('缺少姓名');
+          }
+
+          // 验证日期格式
+          if (arrivalDate && !/^\d{4}-\d{2}-\d{2}$/.test(arrivalDate)) {
+            errors.push('日期格式错误（应为YYYY-MM-DD）');
+          }
+
+          // 验证时间格式
+          if (arrivalTime && !/^\d{1,2}:\d{2}$/.test(arrivalTime)) {
+            errors.push('时间格式错误（应为HH:MM）');
+          }
+
+          // 验证入黔方式
+          if (!['飞机', '高铁', '自驾'].includes(transportType)) {
+            errors.push('入黔方式只能是：飞机、高铁、自驾');
+          }
+
+          // 验证类型
+          if (!['个人', '家庭'].includes(type)) {
+            errors.push('类型只能是：个人、家庭');
+          }
+
+          if (errors.length > 0) {
+            errorRows.push({ row: rowNum, name: name || '(无姓名)', errors });
+            return;
+          }
+
+          validCustomers.push({
+            name,
+            phone,
+            type: type === '家庭' ? '家庭' as const : '个人' as const,
+            peopleCount,
+            transportType: transportType as '高铁' | '飞机' | '自驾',
+            flightNumber,
+            arrivalDate,
+            arrivalTime,
+            salesman,
+            salesmanPhone,
+            company,
+            needVehicle: transportType !== '自驾',
+          });
+        });
 
         if (validCustomers.length > 0) {
           onImportCustomers(validCustomers);
-          // 计算本次导入客户的预计用车数量（使用排班算法模拟）
-          const estimatedCount = calculateEstimatedVehiclesFromStats(validCustomers);
-          alert(
-            `✅ 成功导入 ${validCustomers.length} 条客户信息\n\n` +
-            `📊 预计用车：${estimatedCount} 辆\n` +
-            `（基于排班算法计算，含时间间隔和趟次限制）\n\n` +
-            `💡 请前往「客户管理」页面，点击「重新排班」生成详细排班方案`
+          const estimatedCount = calculateEstimatedVehiclesFromStats(
+            validCustomers as unknown as Customer[]
           );
+
+          let message = `✅ 成功导入 ${validCustomers.length} 条客户信息`;
+          message += `\n📊 预计用车：${estimatedCount} 辆`;
+          message += `\n\n💡 请前往「客户管理」页面，点击「重新排班」生成详细排班方案`;
+
+          if (errorRows.length > 0) {
+            message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+            errorRows.slice(0, 5).forEach(err => {
+              message += `\n第${err.row}行「${err.name}」：${err.errors.join('、')}`;
+            });
+            if (errorRows.length > 5) {
+              message += `\n...还有 ${errorRows.length - 5} 行错误`;
+            }
+            message += `\n\n请修正后重新导入`;
+          }
+
+          alert(message);
         } else {
-          alert('导入数据格式不正确，请检查模板');
+          let errorMsg = '⚠️ 导入失败：所有行都存在数据问题\n\n';
+          errorRows.slice(0, 5).forEach(err => {
+            errorMsg += `第${err.row}行「${err.name}」：${err.errors.join('、')}\n`;
+          });
+          if (errorRows.length > 5) {
+            errorMsg += `\n...还有 ${errorRows.length - 5} 行错误`;
+          }
+          alert(errorMsg);
         }
       } catch (error) {
-        alert('文件读取失败，请检查文件格式');
+        console.error('导入错误:', error);
+        alert('❌ 文件读取失败：\n1. 请确认文件是有效的Excel格式（.xlsx/.xls）\n2. 文件没有被其他程序打开\n3. 尝试重新保存文件后再导入');
       }
     };
     reader.readAsArrayBuffer(file);
@@ -215,24 +363,81 @@ export function Dashboard({
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        const vehicles = jsonData.map((row: any) => ({
-          plateNumber: row['车牌'] || row['plateNumber'] || '',
-          driver: row['师傅'] || row['driver'] || '',
-          driverPhone: row['电话'] || row['phone'] || row['driverPhone'] || '',
-          vehicleType: row['车型'] || row['vehicleType'] || '',
-          maxTrips: parseInt(row['趟次限制'] || row['maxTrips'] || '4') || 4,
-        }));
+        if (!jsonData || jsonData.length === 0) {
+          alert('⚠️ 导入失败：文件内容为空，请检查Excel文件是否有数据');
+          return;
+        }
 
-        const validVehicles = vehicles.filter((v) => v.plateNumber && v.driver);
+        const validVehicles: any[] = [];
+        const errorRows: { row: number; plate: string; errors: string[] }[] = [];
+
+        jsonData.forEach((row: any, index: number) => {
+          const rowNum = index + 2;
+          const errors: string[] = [];
+
+          const plateNumber = String(row['车牌'] || row['plateNumber'] || '').trim();
+          const driver = String(row['师傅'] || row['driver'] || '').trim();
+          const driverPhone = String(row['电话'] || row['phone'] || row['driverPhone'] || '').trim();
+          const vehicleType = String(row['车型'] || row['vehicleType'] || '').trim();
+          const maxTrips = parseInt(row['趟次限制'] || row['maxTrips'] || '4') || 4;
+
+          if (!plateNumber) {
+            errors.push('缺少车牌');
+          }
+
+          if (!driver) {
+            errors.push('缺少师傅姓名');
+          }
+
+          if (driverPhone && !/^1[3-9]\d{9}$/.test(driverPhone)) {
+            errors.push('电话号码格式错误');
+          }
+
+          if (maxTrips < 1 || maxTrips > 10) {
+            errors.push('趟次限制应在1-10之间');
+          }
+
+          if (errors.length > 0) {
+            errorRows.push({ row: rowNum, plate: plateNumber || '(无车牌)', errors });
+            return;
+          }
+
+          validVehicles.push({
+            plateNumber,
+            driver,
+            driverPhone,
+            vehicleType,
+            maxTrips,
+          });
+        });
 
         if (validVehicles.length > 0) {
           onImportVehicles(validVehicles);
-          alert(`成功导入 ${validVehicles.length} 辆车辆信息`);
+
+          let message = `✅ 成功导入 ${validVehicles.length} 辆车辆信息`;
+
+          if (errorRows.length > 0) {
+            message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+            errorRows.slice(0, 5).forEach(err => {
+              message += `\n第${err.row}行「${err.plate}」：${err.errors.join('、')}`;
+            });
+            if (errorRows.length > 5) {
+              message += `\n...还有 ${errorRows.length - 5} 行错误`;
+            }
+            message += `\n\n请修正后重新导入`;
+          }
+
+          alert(message);
         } else {
-          alert('导入数据格式不正确，请检查模板');
+          let errorMsg = '⚠️ 导入失败：所有行都存在数据问题\n\n';
+          errorRows.slice(0, 5).forEach(err => {
+            errorMsg += `第${err.row}行「${err.plate}」：${err.errors.join('、')}\n`;
+          });
+          alert(errorMsg);
         }
       } catch (error) {
-        alert('文件读取失败，请检查文件格式');
+        console.error('车辆导入错误:', error);
+        alert('❌ 文件读取失败：\n1. 请确认文件是有效的Excel格式（.xlsx/.xls）\n2. 文件没有被其他程序打开\n3. 尝试重新保存文件后再导入');
       }
     };
     reader.readAsArrayBuffer(file);
@@ -339,14 +544,14 @@ export function Dashboard({
       </div>
 
       {/* 车辆状态提示 */}
-      {stats.registeredVehicles > 0 && stats.estimatedVehicles > stats.registeredVehicles && (
+      {stats.registeredVehicles > 0 && estimatedVehiclesPreview > stats.registeredVehicles && (
         <Card className="border-orange-200 bg-orange-50">
           <CardContent className="flex items-center gap-3 p-4">
             <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
             <div>
               <p className="font-medium text-orange-800">车辆数量不足</p>
               <p className="text-sm text-orange-700">
-                当前录入 {stats.registeredVehicles} 辆车，预计需要 {stats.estimatedVehicles} 辆，
+                当前录入 {stats.registeredVehicles} 辆车，预计需要 {estimatedVehiclesPreview} 辆，
                 请及时补充车辆信息。
               </p>
             </div>

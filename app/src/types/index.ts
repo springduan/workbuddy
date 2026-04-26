@@ -114,15 +114,30 @@ export interface AppState {
   scheduleTasks: ScheduleTask[];
 }
 
-// 排班配置
-export const SCHEDULE_CONFIG = {
-  flightPickupDuration: 150,    // 飞机完整往返耗时（分钟）：用于计算趟次间隔
-  trainPickupDuration: 100,     // 高铁完整往返耗时（分钟）：用于计算趟次间隔
-  flightDepartureLeadTime: 60,  // 飞机出发提前量（分钟）：到达前60分钟出发
-  trainDepartureLeadTime: 40,   // 高铁出发提前量（分钟）：到达前40分钟出发
-  maxPassengersPerVehicle: 6,   // 每车最大载客数
-  maxTripsPerVehicle: 4,        // 每车最大趟次
-  // 趟次间隔说明：
-  // 上一趟的完整耗时即为下一趟的最小间隔（飞机150分钟，高铁100分钟）
-  // 出发提前量用于计算出发时间（飞机60分钟，高铁40分钟）
+// 排班配置接口
+export interface ScheduleConfig {
+  flightPickupDuration: number;    // 飞机完整往返耗时（分钟）
+  trainPickupDuration: number;     // 高铁完整往返耗时（分钟）
+  flightDepartureLeadTime: number; // 飞机出发提前量（分钟）
+  trainDepartureLeadTime: number;  // 高铁出发提前量（分钟）
+  maxPassengersPerVehicle: number; // 每车最大载客数
+  maxTripsPerVehicle: number;      // 每车最大趟次
+}
+
+// 默认排班配置
+export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
+  flightPickupDuration: 150,
+  trainPickupDuration: 100,
+  flightDepartureLeadTime: 60,
+  trainDepartureLeadTime: 40,
+  maxPassengersPerVehicle: 6,
+  maxTripsPerVehicle: 4,
 };
+
+// 运行时使用的排班配置（可从 localStorage 加载）
+export let SCHEDULE_CONFIG: ScheduleConfig = { ...DEFAULT_SCHEDULE_CONFIG };
+
+// 更新排班配置
+export function updateScheduleConfig(config: ScheduleConfig) {
+  SCHEDULE_CONFIG = { ...config };
+}
