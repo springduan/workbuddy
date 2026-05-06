@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { NotifyConfirmModal } from '@/components/NotifyConfirmModal';
 import {
   Plane,
   Train,
@@ -18,6 +19,7 @@ import {
   RotateCcw,
   ClipboardCheck,
   Search,
+  Bell,
 } from 'lucide-react';
 import type { ScheduleTask, Vehicle, CustomerGroup, Customer } from '@/types';
 
@@ -43,6 +45,17 @@ export function DashboardKanban({
   const [executionFilter, setExecutionFilter] = useState<ExecutionFilter>('all');
   // 搜索词
   const [searchTerm, setSearchTerm] = useState('');
+  // 发送通知弹窗
+  const [notifyModal, setNotifyModal] = useState<{
+    open: boolean;
+    task: ScheduleTask | null;
+    vehicle: Vehicle | null;
+  }>({ open: false, task: null, vehicle: null });
+
+  // 打开发送通知弹窗
+  const handleOpenNotify = (task: ScheduleTask, vehicle: Vehicle) => {
+    setNotifyModal({ open: true, task, vehicle });
+  };
 
   // 获取车辆信息
   const getVehicle = (vehicleId: string) => {
@@ -275,9 +288,18 @@ export function DashboardKanban({
             isOverdue={isOverdue}
             filter={executionFilter}
             onFilterChange={setExecutionFilter}
+            onNotify={handleOpenNotify}
           />
         </div>
       </Tabs>
+
+      {/* 发送通知弹窗 */}
+      <NotifyConfirmModal
+        open={notifyModal.open}
+        onOpenChange={(open) => setNotifyModal({ ...notifyModal, open })}
+        task={notifyModal.task}
+        vehicle={notifyModal.vehicle}
+      />
     </div>
   );
 }
@@ -481,6 +503,7 @@ function ExecutionView({
   isOverdue,
   filter,
   onFilterChange,
+  onNotify,
 }: {
   vehicles: Vehicle[];
   tasksByVehicle: Record<string, ScheduleTask[]>;
@@ -491,6 +514,7 @@ function ExecutionView({
   isOverdue: (task: ScheduleTask) => boolean;
   filter: ExecutionFilter;
   onFilterChange: (filter: ExecutionFilter) => void;
+  onNotify: (task: ScheduleTask, vehicle: Vehicle) => void;
 }) {
   // 过滤出有任务的车辆并排序
   const activeVehicles = useMemo(() => {
@@ -582,6 +606,7 @@ function ExecutionView({
               tasks={tasks}
               onStatusChange={onStatusChange}
               isOverdue={isOverdue}
+              onNotify={onNotify}
             />
           ))}
         </div>
@@ -651,12 +676,14 @@ function VehicleTaskCard({
   tasks,
   onStatusChange,
   isOverdue,
+  onNotify,
 }: {
   vehicle: Vehicle;
   vehicleIndex: number;
   tasks: ScheduleTask[];
   onStatusChange: (taskId: string, newStatus: ScheduleTask['status']) => void;
   isOverdue: (task: ScheduleTask) => boolean;
+  onNotify: (task: ScheduleTask, vehicle: Vehicle) => void;
 }) {
   // 计算完成进度
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
@@ -716,6 +743,7 @@ function VehicleTaskCard({
             index={idx + 1}
             onStatusChange={onStatusChange}
             isOverdue={isOverdue(task)}
+            onNotify={() => onNotify(task, vehicle)}
           />
         ))}
       </div>
@@ -729,11 +757,13 @@ function TaskRow({
   index,
   onStatusChange,
   isOverdue,
+  onNotify,
 }: {
   task: ScheduleTask;
   index: number;
   onStatusChange: (taskId: string, newStatus: ScheduleTask['status']) => void;
   isOverdue: boolean;
+  onNotify: () => void;
 }) {
   const isFlight = task.customers[0]?.transportType === '飞机';
   const hasDelayed = task.customers.some(
@@ -891,6 +921,16 @@ function TaskRow({
               </Button>
             </>
           )}
+          {/* 发送通知按钮 - 所有状态都可发送 */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 text-orange-600 border-orange-200 hover:bg-orange-50"
+            onClick={onNotify}
+          >
+            <Bell className="w-3 h-3 mr-1" />
+            发送通知
+          </Button>
         </div>
       </div>
     </div>

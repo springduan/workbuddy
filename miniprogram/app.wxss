@@ -1,0 +1,56 @@
+/* app.wxss - 全局样式 */
+page {
+  background-color: #f5f7fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  color: #333;
+}
+
+.container {
+  padding: 30rpx;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.btn-primary {
+  background: #1a56db;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  border: none;
+}
+
+.btn-primary:active {
+  background: #1447bb;
+}
+
+.tag-normal {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.tag-delay {
+  background: #fff3e0;
+  color: #e65100;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.tag-cancel {
+  background: #ffebee;
+  color: #c62828;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}

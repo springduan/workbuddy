@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "action": "allow",
+      "value": "pages/*"
+    }
+  ],
+  "desc": "这是一个关于小程序可搜索状态的配置"
+}

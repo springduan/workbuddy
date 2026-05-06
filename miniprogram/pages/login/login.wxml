@@ -1,0 +1,54 @@
+<!-- pages/login/login.wxml -->
+<view class="container">
+  <view class="logo-area">
+    <image class="logo" src="/images/logo.png" mode="aspectFit" />
+    <text class="title">调度通知系统</text>
+    <text class="subtitle">商务车调度平台</text>
+  </view>
+
+  <view class="card form-card">
+    <view class="form-item">
+      <text class="label">您的姓名</text>
+      <input
+        class="input"
+        placeholder="请输入姓名"
+        bindinput="onNameInput"
+        value="{{name}}"
+      />
+    </view>
+
+    <view class="form-item">
+      <text class="label">您的手机号</text>
+      <input
+        class="input"
+        placeholder="请输入手机号"
+        bindinput="onPhoneInput"
+        value="{{phone}}"
+        type="number"
+        maxlength="11"
+      />
+    </view>
+
+    <view class="form-item">
+      <text class="label">身份</text>
+      <view class="role-picker">
+        <view
+          class="role-btn {{role === 'salesperson' ? 'role-btn-active' : ''}}"
+          bindtap="selectRole"
+          data-role="salesperson"
+        >业务员</view>
+        <view
+          class="role-btn {{role === 'driver' ? 'role-btn-active' : ''}}"
+          bindtap="selectRole"
+          data-role="driver"
+        >司机</view>
+      </view>
+    </view>
+  </view>
+
+  <button class="btn-primary" bindtap="onLogin" loading="{{loading}}">
+    登录并订阅通知
+  </button>
+
+  <text class="tip">登录后可接收行程派车通知</text>
+</view>
