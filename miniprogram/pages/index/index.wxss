@@ -95,6 +95,15 @@
   color: #1a1a1a;
   margin-bottom: 20rpx;
   padding-left: 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clear-btn {
+  font-size: 26rpx;
+  color: #c62828;
+  font-weight: normal;
 }
 
 .empty-tip {

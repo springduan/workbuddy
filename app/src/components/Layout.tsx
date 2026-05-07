@@ -12,6 +12,7 @@ import {
   X,
   BarChart3,
   Settings,
+  UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -19,20 +20,25 @@ interface LayoutProps {
   children: ReactNode;
   onLogout: () => void;
   userName: string;
+  userRole?: 'admin' | 'employee';
 }
 
 const navItems = [
-  { path: '/dashboard', label: '首页', icon: LayoutDashboard },
-  { path: '/customers', label: '客户管理', icon: Users },
-  { path: '/vehicles', label: '车辆管理', icon: Car },
-  { path: '/schedule', label: '排班方案', icon: CalendarClock },
-  { path: '/vehicle-timeline', label: '调度看板', icon: BarChart3 },
-  { path: '/settings', label: '配置', icon: Settings },
+  { path: '/dashboard', label: '首页', icon: LayoutDashboard, adminOnly: false },
+  { path: '/customers', label: '客户管理', icon: Users, adminOnly: false },
+  { path: '/vehicles', label: '车辆管理', icon: Car, adminOnly: false },
+  { path: '/schedule', label: '排班方案', icon: CalendarClock, adminOnly: false },
+  { path: '/vehicle-timeline', label: '调度看板', icon: BarChart3, adminOnly: false },
+  { path: '/settings', label: '配置', icon: Settings, adminOnly: true },
+  { path: '/users', label: '用户管理', icon: UserCog, adminOnly: true },
 ];
 
-export function Layout({ children, onLogout, userName }: LayoutProps) {
+export function Layout({ children, onLogout, userName, userRole = 'employee' }: LayoutProps) {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // 根据角色过滤菜单
+  const visibleNavItems = navItems.filter(item => !item.adminOnly || userRole === 'admin');
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -52,7 +58,7 @@ export function Layout({ children, onLogout, userName }: LayoutProps) {
 
             {/* 桌面导航 */}
             <nav className="hidden md:flex items-center gap-1">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (
@@ -113,7 +119,7 @@ export function Layout({ children, onLogout, userName }: LayoutProps) {
         {mobileMenuOpen && (
           <div className="md:hidden border-t bg-white">
             <div className="px-4 py-3 space-y-1">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (

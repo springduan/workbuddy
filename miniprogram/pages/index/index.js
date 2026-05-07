@@ -64,11 +64,52 @@ Page({
     })
   },
 
+  // 清除所有任务记录
+  clearAllTasks() {
+    const openid = app.globalData.openid
+    if (!openid) return
+
+    wx.showModal({
+      title: '确认清除',
+      content: '确定要清除所有任务记录吗？此操作不可恢复。',
+      success: (res) => {
+        if (res.confirm) {
+          wx.request({
+            url: `${app.globalData.serverUrl}/api/tasks`,
+            method: 'DELETE',
+            header: { 'Content-Type': 'application/json' },
+            data: { openid },
+            success: (res) => {
+              if (res.data && res.data.success) {
+                wx.showToast({
+                  title: res.data.message || '已清除',
+                  icon: 'success'
+                })
+                this.loadTasks()
+              } else {
+                wx.showToast({
+                  title: '清除失败',
+                  icon: 'none'
+                })
+              }
+            },
+            fail: () => {
+              wx.showToast({
+                title: '请求失败',
+                icon: 'none'
+              })
+            }
+          })
+        }
+      }
+    })
+  },
+
   reSubscribe() {
     wx.requestSubscribeMessage({
-      tmplIds: ['_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'],
+      tmplIds: ['3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'],
       success: (subRes) => {
-        const accepted = subRes['_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'] === 'accept'
+        const accepted = subRes['3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'] === 'accept'
 
         wx.request({
           url: `${app.globalData.serverUrl}/api/user/subscribe`,
@@ -76,7 +117,7 @@ Page({
           data: {
             openid: app.globalData.openid,
             subscribed: accepted,
-            templateId: '_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'
+            templateId: '3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'
           },
           success: () => {
             wx.showToast({

@@ -228,23 +228,47 @@ export function useAppData() {
     return true;
   }, [customers, saveCustomers, addStatusLog]);
 
-  // 登录
-  const login = useCallback((username: string, password: string): boolean => {
-    const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
-    const users: User[] = storedUsers ? JSON.parse(storedUsers) : [DEFAULT_ADMIN];
-    const user = users.find(u => u.username === username && u.password === password);
-
-    if (user) {
-      setCurrentUser(user);
-      setIsLoggedIn(true);
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
-      return true;
+  // 登录（调用后端 API）
+  const login = useCallback(async (username: string, password: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const user = data.data.user;
+        const token = data.data.token;
+        // 保存 token 和用户信息
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+        return true;
+      } else {
+        throw new Error(data.message || '登录失败');
+      }
+    } catch (err) {
+      console.error('登录失败:', err);
+      throw err; // 让调用方处理错误显示
     }
-    return false;
   }, []);
 
   // 登出
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      try {
+        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/admin/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      } catch (e) {
+        // 忽略错误
+      }
+    }
+    localStorage.removeItem('auth_token');
     setCurrentUser(null);
     setIsLoggedIn(false);
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);

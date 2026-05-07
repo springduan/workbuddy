@@ -40,7 +40,8 @@ db.exec(`
     salesperson_name TEXT,
     salesperson_phone TEXT,
     status TEXT DEFAULT 'normal',
-    sent_at TEXT DEFAULT (datetime('now', 'localtime'))
+    sent_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(task_id, openid)
   );
 
   -- 推送日志表
@@ -51,6 +52,17 @@ db.exec(`
     success INTEGER,
     error_msg TEXT,
     pushed_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  -- 管理后台用户表
+  CREATE TABLE IF NOT EXISTS admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin' CHECK(role IN ('admin', 'employee')),
+    created_at TEXT DEFAULT (datetime('now', 'localtime')),
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
 `)
 

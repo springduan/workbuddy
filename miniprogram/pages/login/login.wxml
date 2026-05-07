@@ -47,8 +47,23 @@
   </view>
 
   <button class="btn-primary" bindtap="onLogin" loading="{{loading}}">
-    登录并订阅通知
+    登录
   </button>
 
   <text class="tip">登录后可接收行程派车通知</text>
+
+  <!-- 授权弹窗 -->
+  <view class="subscribe-modal" wx:if="{{pendingUser}}">
+    <view class="modal-mask"></view>
+    <view class="modal-content">
+      <view class="modal-title">开启消息通知</view>
+      <view class="modal-desc">订阅通知后，您可以及时收到派车任务推送</view>
+      <view class="modal-info">手机号：{{pendingUser.phone}}</view>
+      <view class="modal-info">身份：{{pendingUser.role === 'driver' ? '司机' : '业务员'}}</view>
+      <button class="btn-subscribe" bindtap="onAuthorizeSubscribe">
+        授权通知
+      </button>
+      <view class="btn-skip" bindtap="onSkipSubscribe">暂不授权</view>
+    </view>
+  </view>
 </view>

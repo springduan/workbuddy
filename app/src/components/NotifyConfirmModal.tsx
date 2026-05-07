@@ -23,7 +23,7 @@ interface PushResult {
   role: string;
   name: string;
   phone: string;
-  status: 'success' | 'failed' | 'pending';
+  status: 'success' | 'failed' | 'pending' | 'duplicate';
   error?: string;
 }
 
@@ -69,14 +69,15 @@ export function NotifyConfirmModal({
     setLoading(true);
     setResults(null);
 
+    // 收集所有不重复的业务员手机号（而非只取第一个客户的）
+    const allSalesmanPhones = Array.from(
+      new Set(task.customers.map(c => c.salesmanPhone).filter(Boolean))
+    );
+
     try {
-      const response = await fetch('http://192.168.2.38:3000/api/notify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tasks: [{
+      // 为每个业务员生成一条任务推送（保证所有人都能收到）
+      const tasksPayload = allSalesmanPhones.length > 0
+        ? allSalesmanPhones.map(phone => ({
             taskId: task.id,
             date: task.pickupTime.split(' ')[0],
             departureTime: task.pickupTime.split(' ')[1],
@@ -86,34 +87,61 @@ export function NotifyConfirmModal({
             destination: task.pickupLocation,
             vehiclePlate: vehicle.plateNumber,
             driverPhone: vehicle.driverPhone || '',
-            salespersonPhone: task.customers[0]?.salesmanPhone || '',
-          }],
-        }),
+            salespersonPhone: phone,
+          }))
+        : [{
+            taskId: task.id,
+            date: task.pickupTime.split(' ')[0],
+            departureTime: task.pickupTime.split(' ')[1],
+            customerName: task.customers.map(c => c.name).join('、'),
+            customerPhone: task.customers.map(c => c.phone).filter(Boolean).join('、'),
+            flightInfo: task.customers[0]?.flightNumber || '',
+            destination: task.pickupLocation,
+            vehiclePlate: vehicle.plateNumber,
+            driverPhone: vehicle.driverPhone || '',
+            salespersonPhone: '',
+          }];
+
+      const response = await fetch('http://192.168.2.38:3000/api/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tasks: tasksPayload }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // 处理推送结果
+        // 处理推送结果（合并去重：司机只出现一次）
         const pushResults: PushResult[] = [];
+        const seenPhones = new Set<string>();
 
         for (const taskResult of data.data) {
           for (const pushed of taskResult.pushed) {
-            pushResults.push({
-              role: pushed.role === 'driver' ? '司机' : '业务员',
-              name: pushed.name,
-              phone: pushed.phone,
-              status: 'success',
-            });
+            const key = `${pushed.phone}-${pushed.role}`;
+            if (!seenPhones.has(key)) {
+              seenPhones.add(key);
+              pushResults.push({
+                role: pushed.role === 'driver' ? '司机' : '业务员',
+                name: pushed.name,
+                phone: pushed.phone,
+                status: pushed.duplicate ? 'duplicate' : 'success',
+              });
+            }
           }
           for (const failed of taskResult.failed) {
-            pushResults.push({
-              role: failed.role === 'driver' ? '司机' : '业务员',
-              name: '未知',
-              phone: failed.phone,
-              status: 'failed',
-              error: failed.error,
-            });
+            const key = `${failed.phone}-${failed.role}`;
+            if (!seenPhones.has(key)) {
+              seenPhones.add(key);
+              pushResults.push({
+                role: failed.role === 'driver' ? '司机' : '业务员',
+                name: '未知',
+                phone: failed.phone,
+                status: 'failed',
+                error: failed.error,
+              });
+            }
           }
         }
 
@@ -247,11 +275,14 @@ export function NotifyConfirmModal({
                   key={idx}
                   className={`flex items-center gap-3 p-3 rounded-lg ${
                     result.status === 'success' ? 'bg-green-50' :
+                    result.status === 'duplicate' ? 'bg-blue-50' :
                     result.status === 'failed' ? 'bg-red-50' : 'bg-gray-50'
                   }`}
                 >
                   {result.status === 'success' ? (
                     <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  ) : result.status === 'duplicate' ? (
+                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
                   ) : (
                     <XCircle className="w-5 h-5 text-red-600" />
                   )}
@@ -261,6 +292,9 @@ export function NotifyConfirmModal({
                         {result.role}
                       </Badge>
                       <span className="font-medium">{result.name}</span>
+                      {result.status === 'duplicate' && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">已发送</Badge>
+                      )}
                     </div>
                     {result.error && (
                       <div className="text-xs text-red-600 mt-1">{result.error}</div>

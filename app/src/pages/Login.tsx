@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Car, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface LoginProps {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 export function Login({ onLogin }: LoginProps) {
@@ -20,14 +21,18 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
     setIsLoading(true);
 
-    // 模拟网络延迟
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const success = onLogin(username, password);
-    if (!success) {
-      setError('用户名或密码错误');
+    try {
+      const success = await onLogin(username, password);
+      if (!success) {
+        setError('用户名或密码错误');
+      } else {
+        toast.success('登录成功');
+      }
+    } catch (err: any) {
+      setError(err.message || '登录失败，请检查网络连接');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -69,7 +74,6 @@ export function Login({ onLogin }: LoginProps) {
                 onChange={(e) => setUsername(e.target.value)}
                 className="h-11"
                 required
-                autoComplete="username"
               />
             </div>
 
@@ -85,7 +89,6 @@ export function Login({ onLogin }: LoginProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-11"
                 required
-                autoComplete="current-password"
               />
             </div>
 

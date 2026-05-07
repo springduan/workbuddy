@@ -98,11 +98,11 @@ export interface CustomerGroup {
 
 // 用户信息
 export interface User {
-  id: string;
+  id: string | number;
   username: string;
-  password: string;
+  password?: string;
   name: string;
-  role: 'admin' | 'operator';
+  role: 'admin' | 'employee';
 }
 
 // 应用状态

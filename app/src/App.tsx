@@ -9,6 +9,7 @@ import { VehicleList } from '@/pages/VehicleList';
 import { Schedule } from '@/pages/Schedule';
 import { DashboardKanban } from '@/pages/DashboardKanban';
 import { ConfigSettings } from '@/pages/ConfigSettings';
+import { UserManagement } from '@/pages/UserManagement';
 
 function App() {
   const {
@@ -63,7 +64,7 @@ function App() {
           path="/"
           element={
             isLoggedIn ? (
-              <Layout onLogout={logout} userName={currentUser?.name || '用户'}>
+              <Layout onLogout={logout} userName={currentUser?.name || '用户'} userRole={currentUser?.role || 'employee'}>
                 <Outlet />
               </Layout>
             ) : (
@@ -143,6 +144,16 @@ function App() {
                 onSave={saveScheduleConfig}
                 onReset={resetScheduleConfig}
               />
+            }
+          />
+          <Route
+            path="users"
+            element={
+              currentUser?.role === 'admin' ? (
+                <UserManagement />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )
             }
           />
         </Route>

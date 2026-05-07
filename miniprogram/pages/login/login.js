@@ -6,7 +6,8 @@ Page({
     name: '',
     phone: '',
     role: 'salesperson', // 默认业务员
-    loading: false
+    loading: false,
+    pendingUser: null // 登录成功后暂存用户信息
   },
 
   onNameInput(e) {
@@ -55,7 +56,7 @@ Page({
             if (res.data && res.data.success) {
               const { openid } = res.data.data
 
-              // 保存用户信息
+              // 保存用户信息到本地
               wx.setStorageSync('userInfo', { name, phone })
               wx.setStorageSync('openid', openid)
               wx.setStorageSync('role', role)
@@ -63,8 +64,12 @@ Page({
               app.globalData.openid = openid
               app.globalData.role = role
 
-              // 第三步：申请订阅消息权限
-              this.requestSubscribe(openid, name, phone, role)
+              // 暂存用户信息，等待用户点击授权按钮
+              this.setData({
+                loading: false,
+                pendingUser: { openid, name, phone, role },
+                showSubscribeModal: true
+              })
             } else {
               wx.showToast({ title: res.data?.message || '登录失败', icon: 'none' })
               this.setData({ loading: false })
@@ -85,12 +90,46 @@ Page({
     })
   },
 
+  // 用户点击「授权通知」按钮
+  onAuthorizeSubscribe() {
+    const { pendingUser } = this.data
+    if (!pendingUser) return
+
+    this.requestSubscribe(pendingUser.openid, pendingUser.name, pendingUser.phone, pendingUser.role)
+  },
+
+  // 用户跳过授权
+  onSkipSubscribe() {
+    const { pendingUser } = this.data
+    if (!pendingUser) return
+
+    // 通知后端用户拒绝订阅
+    wx.request({
+      url: `${app.globalData.serverUrl}/api/user/subscribe`,
+      method: 'POST',
+      data: {
+        openid: pendingUser.openid,
+        subscribed: false,
+        templateId: '3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'
+      },
+      success: () => {
+        wx.showToast({ title: '登录成功', icon: 'success' })
+        setTimeout(() => {
+          wx.reLaunch({ url: '/pages/index/index' })
+        }, 1500)
+      },
+      fail: () => {
+        wx.reLaunch({ url: '/pages/index/index' })
+      }
+    })
+  },
+
   requestSubscribe(openid, name, phone, role) {
-    // 申请订阅消息权限
+    // 申请订阅消息权限（必须由用户点击触发）
     wx.requestSubscribeMessage({
-      tmplIds: ['_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'],
+      tmplIds: ['3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'],
       success: (subRes) => {
-        const accepted = subRes['_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'] === 'accept'
+        const accepted = subRes['3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'] === 'accept'
 
         // 通知后端订阅状态
         wx.request({
@@ -99,7 +138,7 @@ Page({
           data: {
             openid,
             subscribed: accepted,
-            templateId: '_axfOU8CQJtAnrHzkPlen7G0myB1KHeDqV-CdcTiIEI'
+            templateId: '3190quZoGppQAekXMUcnLYUwdyG1C7nLgLJmsjoCkcA'
           },
           success: () => {
             if (accepted) {
@@ -107,9 +146,13 @@ Page({
             } else {
               wx.showModal({
                 title: '提示',
-                content: '您未授权通知，将无法收到行程推送。可在设置中重新授权。',
-                showCancel: false
+                content: '您未授权通知，将无法收到行程推送。可在首页重新授权。',
+                showCancel: false,
+                success: () => {
+                  wx.reLaunch({ url: '/pages/index/index' })
+                }
               })
+              return
             }
 
             // 跳转到任务页
@@ -126,7 +169,14 @@ Page({
       fail: (err) => {
         console.error('订阅消息失败', err)
         // 订阅失败也继续跳转
-        wx.reLaunch({ url: '/pages/index/index' })
+        wx.showModal({
+          title: '提示',
+          content: '订阅失败，仍可登录。您可以在首页重新授权。',
+          showCancel: false,
+          success: () => {
+            wx.reLaunch({ url: '/pages/index/index' })
+          }
+        })
       }
     })
   }
