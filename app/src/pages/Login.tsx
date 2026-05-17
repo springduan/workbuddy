@@ -100,9 +100,6 @@ export function Login({ onLogin }: LoginProps) {
               {isLoading ? '登录中...' : '登录'}
             </Button>
 
-            <div className="text-center text-sm text-gray-500 pt-2">
-              <p>默认账号: admin / admin123</p>
-            </div>
           </form>
         </CardContent>
       </Card>

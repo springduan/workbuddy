@@ -13,7 +13,10 @@ const SECRET = process.env.WECHAT_SECRET
 const TEMPLATE_ID = process.env.TEMPLATE_ID
 
 // JWT secret for admin authentication
-const JWT_SECRET = process.env.JWT_SECRET || 'workbuddy-admin-secret-key-2024'
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  console.warn('⚠️ 未设置 JWT_SECRET 环境变量，使用临时密钥。生产环境请配置 .env 文件！')
+  return crypto.randomBytes(32).toString('hex')
+})()
 
 // Simple token storage (in production, use Redis)
 const activeTokens = new Map()
@@ -58,7 +61,14 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex')
 }
 
-app.use(cors())
+app.use(cors({
+  origin: [
+    'https://bybus.asia',
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ],
+  credentials: true,
+}))
 app.use(express.json())
 
 // ─────────────────────────────────────────────

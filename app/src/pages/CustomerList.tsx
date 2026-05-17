@@ -677,7 +677,7 @@ export function CustomerList({
                   min={getMinTime(customerToDelay)}
                 />
                 <p className="text-xs text-amber-600">
-                  ⚠️ 必须晚于原计划到达时间，提交后不可二次修改
+                  ⚠️ 必须晚于原计划到达时间。如需修改，可先恢复为正常状态后重新登记
                 </p>
               </div>
 

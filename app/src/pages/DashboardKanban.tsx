@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   Search,
   Bell,
+  Briefcase,
 } from 'lucide-react';
 import type { ScheduleTask, Vehicle, CustomerGroup, Customer } from '@/types';
 
@@ -869,6 +870,25 @@ function TaskRow({
               </span>
             ))}
           </div>
+
+          {/* 业务员信息 */}
+          {task.customers.some((c) => c.salesman || c.salesmanPhone || c.company) && (
+            <div className="flex flex-wrap gap-2 pl-1 pt-1">
+              {task.customers.map((c) =>
+                (c.salesman || c.salesmanPhone || c.company) ? (
+                  <span
+                    key={`sales-${c.id}`}
+                    className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100"
+                  >
+                    <Briefcase className="w-3 h-3" />
+                    {c.salesman && <span className="font-medium">{c.salesman}</span>}
+                    {c.salesmanPhone && <span className="text-blue-600">{c.salesmanPhone}</span>}
+                    {c.company && <span className="text-gray-500">· {c.company}</span>}
+                  </span>
+                ) : null
+              )}
+            </div>
+          )}
         </div>
 
         {/* 右侧：操作按钮 */}

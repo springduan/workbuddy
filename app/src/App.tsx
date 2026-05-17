@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAppData } from '@/hooks/useAppData';
 import { Login } from '@/pages/Login';
@@ -12,6 +12,16 @@ import { ConfigSettings } from '@/pages/ConfigSettings';
 import { UserManagement } from '@/pages/UserManagement';
 
 function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  );
+}
+
+// 包装组件用于使用 useNavigate
+function AppContent() {
+  const navigate = useNavigate();
   const {
     isLoggedIn,
     currentUser,
@@ -43,8 +53,13 @@ function App() {
 
   const stats = getStats();
 
+  // 包装 navigate 函数给 Dashboard 用
+  const navigateTo = (path: string) => {
+    navigate(path);
+  };
+
   return (
-    <BrowserRouter>
+    <>
       <Toaster position="top-right" richColors />
       <Routes>
         {/* 登录页 */}
@@ -80,6 +95,8 @@ function App() {
                 stats={stats}
                 onImportCustomers={importCustomers}
                 onImportVehicles={importVehicles}
+                onGenerateSchedule={generateSchedule}
+                navigateTo={navigateTo}
                 customerCount={customers.length}
                 vehicleCount={vehicles.length}
                 allCustomers={customers}
@@ -161,7 +178,7 @@ function App() {
         {/* 未匹配的路由重定向 */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-    </BrowserRouter>
+    </>
   );
 }
 

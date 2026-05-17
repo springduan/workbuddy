@@ -102,7 +102,8 @@ export function NotifyConfirmModal({
             salespersonPhone: '',
           }];
 
-      const response = await fetch('http://192.168.2.38:3000/api/notify', {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/notify`;
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
