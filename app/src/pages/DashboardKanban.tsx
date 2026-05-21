@@ -526,7 +526,7 @@ function GanttView({
                                   >
                                     <div className="text-white text-xs font-medium truncate">
                                       {task.customers[0]?.flightNumber ||
-                                        task.pickupTime.split(' ')[1]}
+                                        `第${task.tripNumber}趟`}
                                     </div>
                                     {hasDelayed && (
                                       <div className="absolute top-0.5 right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center">
@@ -874,7 +874,7 @@ function TaskRow({
                 <Train className="w-3.5 h-3.5 text-green-600 shrink-0" />
               )}
               <span className="font-semibold text-sm">
-                {task.customers[0]?.flightNumber || '-'}
+                {task.customers[0]?.flightNumber || `第${index}趟`}
               </span>
             </div>
             {/* 延误标记 */}
