@@ -283,8 +283,8 @@ interface DashboardProps {
     cancelledCount: number;
     selfDriveCount: number;
   };
-  onImportCustomers: (customers: Omit<Customer, 'id' | 'createdAt' | 'status' | 'source'>[]) => { skippedCount: number } | void;
-  onImportVehicles: (vehicles: Omit<Vehicle, 'id' | 'createdAt' | 'status' | 'source'>[]) => { skippedCount: number } | void;
+  onImportCustomers: (customers: Omit<Customer, 'id' | 'createdAt' | 'status' | 'source'>[]) => { added: Customer[]; skippedCount: number } | void;
+  onImportVehicles: (vehicles: Omit<Vehicle, 'id' | 'createdAt' | 'status' | 'source'>[]) => { added: Vehicle[]; skippedCount: number } | void;
   onGenerateSchedule: () => void;
   navigateTo: (path: string) => void;
   customerCount: number;
@@ -413,30 +413,45 @@ export function Dashboard({
         if (validCustomers.length > 0) {
           const importResult = onImportCustomers(validCustomers);
           const skippedCount = importResult?.skippedCount ?? 0;
-          const addedCount = validCustomers.length - skippedCount;
-          const estimatedCount = calculateEstimatedVehiclesFromStats(
-            validCustomers as unknown as Customer[]
-          );
+          const addedList = importResult?.added ?? [];
+          const addedCount = addedList.length;
 
-          let message = `✅ 成功导入 ${addedCount} 条客户信息`;
-          if (skippedCount > 0) {
-            message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（姓名+手机号相同）`;
-          }
-          message += `\n📊 预计用车：${estimatedCount} 辆`;
-          message += `\n\n💡 请前往「客户管理」页面，点击「重新排班」生成详细排班方案`;
-
-          if (errorRows.length > 0) {
-            message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
-            errorRows.slice(0, 5).forEach(err => {
-              message += `\n第${err.row}行「${err.name}」：${err.errors.join('、')}`;
-            });
-            if (errorRows.length > 5) {
-              message += `\n...还有 ${errorRows.length - 5} 行错误`;
+          if (addedCount === 0) {
+            const message = `⏭️ 所有数据已存在，无需重复导入\n\n已跳过 ${validCustomers.length} 条重复数据（姓名+手机号相同）`;
+            if (errorRows.length > 0) {
+              let errMsg = message + `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+              errorRows.slice(0, 5).forEach(err => {
+                errMsg += `\n第${err.row}行「${err.name}」：${err.errors.join('、')}`;
+              });
+              alert(errMsg);
+            } else {
+              alert(message);
             }
-            message += `\n\n请修正后重新导入`;
-          }
+          } else {
+            const estimatedCount = calculateEstimatedVehiclesFromStats(
+              addedList as unknown as Customer[]
+            );
 
-          alert(message);
+            let message = `✅ 成功导入 ${addedCount} 条客户信息`;
+            if (skippedCount > 0) {
+              message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（姓名+手机号相同）`;
+            }
+            message += `\n📊 预计用车：${estimatedCount} 辆`;
+            message += `\n\n💡 请前往「客户管理」页面，点击「重新排班」生成详细排班方案`;
+
+            if (errorRows.length > 0) {
+              message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+              errorRows.slice(0, 5).forEach(err => {
+                message += `\n第${err.row}行「${err.name}」：${err.errors.join('、')}`;
+              });
+              if (errorRows.length > 5) {
+                message += `\n...还有 ${errorRows.length - 5} 行错误`;
+              }
+              message += `\n\n请修正后重新导入`;
+            }
+
+            alert(message);
+          }
         } else {
           let errorMsg = '⚠️ 导入失败：所有行都存在数据问题\n\n';
           errorRows.slice(0, 5).forEach(err => {
@@ -521,25 +536,39 @@ export function Dashboard({
         if (validVehicles.length > 0) {
           const importResult = onImportVehicles(validVehicles);
           const skippedCount = importResult?.skippedCount ?? 0;
-          const addedCount = validVehicles.length - skippedCount;
+          const addedList = importResult?.added ?? [];
+          const addedCount = addedList.length;
 
-          let message = `✅ 成功导入 ${addedCount} 辆车辆信息`;
-          if (skippedCount > 0) {
-            message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（车牌号相同）`;
-          }
-
-          if (errorRows.length > 0) {
-            message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
-            errorRows.slice(0, 5).forEach(err => {
-              message += `\n第${err.row}行「${err.plate}」：${err.errors.join('、')}`;
-            });
-            if (errorRows.length > 5) {
-              message += `\n...还有 ${errorRows.length - 5} 行错误`;
+          if (addedCount === 0) {
+            const message = `⏭️ 所有数据已存在，无需重复导入\n\n已跳过 ${validVehicles.length} 条重复数据（车牌号相同）`;
+            if (errorRows.length > 0) {
+              let errMsg = message + `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+              errorRows.slice(0, 5).forEach(err => {
+                errMsg += `\n第${err.row}行「${err.plate}」：${err.errors.join('、')}`;
+              });
+              alert(errMsg);
+            } else {
+              alert(message);
             }
-            message += `\n\n请修正后重新导入`;
-          }
+          } else {
+            let message = `✅ 成功导入 ${addedCount} 辆车辆信息`;
+            if (skippedCount > 0) {
+              message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（车牌号相同）`;
+            }
 
-          alert(message);
+            if (errorRows.length > 0) {
+              message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;
+              errorRows.slice(0, 5).forEach(err => {
+                message += `\n第${err.row}行「${err.plate}」：${err.errors.join('、')}`;
+              });
+              if (errorRows.length > 5) {
+                message += `\n...还有 ${errorRows.length - 5} 行错误`;
+              }
+              message += `\n\n请修正后重新导入`;
+            }
+
+            alert(message);
+          }
         } else {
           let errorMsg = '⚠️ 导入失败：所有行都存在数据问题\n\n';
           errorRows.slice(0, 5).forEach(err => {
