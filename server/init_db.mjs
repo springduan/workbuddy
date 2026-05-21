@@ -25,7 +25,6 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id TEXT NOT NULL,
     openid TEXT NOT NULL,
-    UNIQUE(task_id, openid),
     task_date TEXT,
     customer_name TEXT,
     customer_phone TEXT,
@@ -39,7 +38,8 @@ db.exec(`
     salesperson_name TEXT,
     salesperson_phone TEXT,
     status TEXT DEFAULT 'normal',
-    sent_at TEXT DEFAULT (datetime('now', 'localtime'))
+    sent_at TEXT DEFAULT (datetime('now', 'localtime')),
+    UNIQUE(task_id, openid)
   );
 
   CREATE TABLE IF NOT EXISTS push_logs (

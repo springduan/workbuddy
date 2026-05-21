@@ -283,8 +283,8 @@ interface DashboardProps {
     cancelledCount: number;
     selfDriveCount: number;
   };
-  onImportCustomers: (customers: Omit<Customer, 'id' | 'createdAt' | 'status' | 'source'>[]) => void;
-  onImportVehicles: (vehicles: Omit<Vehicle, 'id' | 'createdAt' | 'status' | 'source'>[]) => void;
+  onImportCustomers: (customers: Omit<Customer, 'id' | 'createdAt' | 'status' | 'source'>[]) => { skippedCount: number } | void;
+  onImportVehicles: (vehicles: Omit<Vehicle, 'id' | 'createdAt' | 'status' | 'source'>[]) => { skippedCount: number } | void;
   onGenerateSchedule: () => void;
   navigateTo: (path: string) => void;
   customerCount: number;
@@ -411,12 +411,17 @@ export function Dashboard({
         });
 
         if (validCustomers.length > 0) {
-          onImportCustomers(validCustomers);
+          const importResult = onImportCustomers(validCustomers);
+          const skippedCount = importResult?.skippedCount ?? 0;
+          const addedCount = validCustomers.length - skippedCount;
           const estimatedCount = calculateEstimatedVehiclesFromStats(
             validCustomers as unknown as Customer[]
           );
 
-          let message = `✅ 成功导入 ${validCustomers.length} 条客户信息`;
+          let message = `✅ 成功导入 ${addedCount} 条客户信息`;
+          if (skippedCount > 0) {
+            message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（姓名+手机号相同）`;
+          }
           message += `\n📊 预计用车：${estimatedCount} 辆`;
           message += `\n\n💡 请前往「客户管理」页面，点击「重新排班」生成详细排班方案`;
 
@@ -514,9 +519,14 @@ export function Dashboard({
         });
 
         if (validVehicles.length > 0) {
-          onImportVehicles(validVehicles);
+          const importResult = onImportVehicles(validVehicles);
+          const skippedCount = importResult?.skippedCount ?? 0;
+          const addedCount = validVehicles.length - skippedCount;
 
-          let message = `✅ 成功导入 ${validVehicles.length} 辆车辆信息`;
+          let message = `✅ 成功导入 ${addedCount} 辆车辆信息`;
+          if (skippedCount > 0) {
+            message += `\n⏭️ 跳过 ${skippedCount} 条重复数据（车牌号相同）`;
+          }
 
           if (errorRows.length > 0) {
             message += `\n\n⚠️ 有 ${errorRows.length} 行数据未通过验证：`;

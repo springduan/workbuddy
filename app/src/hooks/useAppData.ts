@@ -289,7 +289,18 @@ export function useAppData() {
 
   // 批量添加客户（从导入）
   const importCustomers = useCallback((newCustomers: Omit<Customer, 'id' | 'createdAt' | 'status' | 'source'>[]) => {
-    const customersWithIds = newCustomers.map(c => ({
+    // 去重：姓名 + 手机号 相同视为重复，跳过已有数据中存在的记录
+    const existingKeys = new Set(customers.map(c => `${c.name}__${c.phone}`));
+    // 同时对本次导入文件内部也去重
+    const seenKeys = new Set<string>();
+    const dedupedNewCustomers = newCustomers.filter(c => {
+      const key = `${c.name}__${c.phone}`;
+      if (existingKeys.has(key) || seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+    const skippedCount = newCustomers.length - dedupedNewCustomers.length;
+    const customersWithIds = dedupedNewCustomers.map(c => ({
       ...c,
       id: generateId(),
       createdAt: new Date().toISOString(),
@@ -297,7 +308,7 @@ export function useAppData() {
       source: 'import' as const,
     }));
     saveCustomers([...customers, ...customersWithIds]);
-    return customersWithIds;
+    return { added: customersWithIds, skippedCount };
   }, [customers, saveCustomers]);
 
   // 删除客户
@@ -325,7 +336,17 @@ export function useAppData() {
 
   // 批量添加车辆（从导入）
   const importVehicles = useCallback((newVehicles: Omit<Vehicle, 'id' | 'createdAt' | 'status' | 'source'>[]) => {
-    const vehiclesWithIds = newVehicles.map(v => ({
+    // 去重：车牌号相同视为重复，跳过已有数据中存在的记录
+    const existingPlates = new Set(vehicles.map(v => v.plateNumber));
+    // 同时对本次导入文件内部也去重
+    const seenPlates = new Set<string>();
+    const dedupedNewVehicles = newVehicles.filter(v => {
+      if (existingPlates.has(v.plateNumber) || seenPlates.has(v.plateNumber)) return false;
+      seenPlates.add(v.plateNumber);
+      return true;
+    });
+    const skippedCount = newVehicles.length - dedupedNewVehicles.length;
+    const vehiclesWithIds = dedupedNewVehicles.map(v => ({
       ...v,
       id: generateId(),
       createdAt: new Date().toISOString(),
@@ -333,7 +354,7 @@ export function useAppData() {
       source: 'import' as const,
     }));
     saveVehicles([...vehicles, ...vehiclesWithIds]);
-    return vehiclesWithIds;
+    return { added: vehiclesWithIds, skippedCount };
   }, [vehicles, saveVehicles]);
 
   // 删除车辆
