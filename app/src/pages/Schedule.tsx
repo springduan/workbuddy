@@ -234,18 +234,21 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
         <StatCard
           title="排班任务"
           value={stats.totalTasks}
+          unit="趟"
           icon={CalendarClock}
           color="blue"
         />
         <StatCard
           title="使用车辆"
           value={stats.totalVehicles}
+          unit="辆"
           icon={Car}
           color="green"
         />
         <StatCard
           title="已安排客户"
           value={stats.scheduledCustomerGroups}
+          unit="组"
           subtitle={`${stats.scheduledPeople} 人`}
           icon={CheckCircle}
           color="green"
@@ -257,6 +260,7 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                 <StatCard
                   title="待安排客户"
                   value={stats.pendingCustomerGroups}
+                  unit="组"
                   subtitle={`${stats.pendingPeople} 人`}
                   icon={Clock}
                   color="orange"
@@ -280,6 +284,7 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
           <StatCard
             title="待安排客户"
             value={stats.pendingCustomerGroups}
+            unit="组"
             subtitle={`${stats.pendingPeople} 人`}
             icon={Clock}
             color="orange"
@@ -288,6 +293,7 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
         <StatCard
           title="延误客户"
           value={delayedCount}
+          unit="组"
           icon={AlertTriangle}
           color="yellow"
         />
@@ -649,11 +655,12 @@ interface StatCardProps {
   title: string;
   value: number;
   subtitle?: string;
+  unit?: string;
   icon: React.ComponentType<{ className?: string }>;
   color: 'blue' | 'green' | 'purple' | 'orange' | 'yellow';
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, color }: StatCardProps) {
+function StatCard({ title, value, subtitle, unit, icon: Icon, color }: StatCardProps) {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -668,7 +675,9 @@ function StatCard({ title, value, subtitle, icon: Icon, color }: StatCardProps) 
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {value}<span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>
+            </p>
             {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
           </div>
           <div className={`p-3 rounded-lg ${colorClasses[color]}`}>

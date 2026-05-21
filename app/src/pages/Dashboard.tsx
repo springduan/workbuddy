@@ -648,21 +648,21 @@ export function Dashboard({
         <StatCardCompact
           title="延误"
           value={stats.delayedCount}
-          suffix="人"
+          suffix="组"
           icon={AlertTriangle}
           color="yellow"
         />
         <StatCardCompact
           title="取消"
           value={stats.cancelledCount}
-          suffix="人"
+          suffix="组"
           icon={UserX}
           color="red"
         />
         <StatCardCompact
           title="自驾"
           value={stats.selfDriveCount}
-          suffix="人"
+          suffix="组"
           icon={Navigation}
           color="gray"
         />

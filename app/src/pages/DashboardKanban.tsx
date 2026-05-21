@@ -238,30 +238,35 @@ export function DashboardKanban({
         <StatCard
           title="排班趟数"
           value={stats.totalTrips}
+          unit="趟"
           icon={CalendarClock}
           color="blue"
         />
         <StatCard
           title="使用车辆数"
           value={stats.usedVehicles}
+          unit="辆"
           icon={Car}
           color="green"
         />
         <StatCard
           title="服务客户数"
           value={stats.totalCustomers}
+          unit="组"
           icon={Users}
           color="purple"
         />
         <StatCard
           title="涉及业务员"
           value={stats.salesmanCount}
+          unit="人"
           icon={Briefcase}
           color="blue"
         />
         <StatCard
           title="空闲车辆数"
           value={stats.availableVehicles}
+          unit="辆"
           icon={Clock}
           color="orange"
         />
@@ -378,11 +383,12 @@ export function DashboardKanban({
 interface StatCardProps {
   title: string;
   value: number;
+  unit?: string;
   icon: React.ComponentType<{ className?: string }>;
   color: 'blue' | 'green' | 'purple' | 'orange';
 }
 
-function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
+function StatCard({ title, value, unit, icon: Icon, color }: StatCardProps) {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -396,7 +402,9 @@ function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {value}<span className="text-sm font-normal text-gray-400 ml-1">{unit}</span>
+            </p>
           </div>
           <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
             <Icon className="w-6 h-6" />
