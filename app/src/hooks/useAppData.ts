@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'scheduler_current_user',
   STATUS_LOGS: 'scheduler_status_logs',
   SCHEDULE_CONFIG: 'scheduler_config',
+  VEHICLE_STATS: 'scheduler_vehicle_stats',
 };
 
 // 初始管理员账户
@@ -438,148 +439,218 @@ export function useAppData() {
       return a.arrivalTime.localeCompare(b.arrivalTime);
     });
 
-    // 分配车辆
+    // ============================================================
+    // 贪心分配 + 后处理重平衡算法 v3
+    // 第一阶段：贪心分配（每组全部车槽一次性分配，优先选趟数最少的车）
+    // 第二阶段：重平衡（从趟数最多的车挪任务到趟数最少的车）
+    // ============================================================
+    console.log('[排班v3] 贪心+重平衡，车辆数:', availableVehicles.length, '客户组数:', sortedGroups.length);
+
+    // --- 辅助：时间窗检查 ---
+    const isTimeWindowOk = (
+      vehicleId: string,
+      pickupTimeMinutes: number,
+      tripDuration: number,
+      currentTasks: ScheduleTask[]
+    ): boolean => {
+      const vehicleTasks = currentTasks.filter(t => t.vehicleId === vehicleId);
+      if (vehicleTasks.length === 0) return true;
+      const existing = vehicleTasks.map(t => {
+        const parts = t.pickupTime.split(' ');
+        const timePart = parts[parts.length - 1];
+        const [h, m] = timePart.split(':').map(Number);
+        return {
+          minutes: h * 60 + m,
+          duration: t.customers.some(c => c.transportType === '飞机')
+            ? SCHEDULE_CONFIG.flightPickupDuration
+            : SCHEDULE_CONFIG.trainPickupDuration,
+        };
+      });
+      const earlier = existing.filter(t => t.minutes <= pickupTimeMinutes).sort((a, b) => b.minutes - a.minutes);
+      if (earlier.length > 0 && pickupTimeMinutes - earlier[0].minutes < earlier[0].duration) return false;
+      const later = existing.filter(t => t.minutes > pickupTimeMinutes).sort((a, b) => a.minutes - b.minutes);
+      if (later.length > 0 && later[0].minutes - pickupTimeMinutes < tripDuration) return false;
+      return true;
+    };
+
+    // --- 辅助：选择趟数最少+历史轮换+类型均衡的车 ---
+    const pickBestVehicle = (feasible: typeof availableVehicles, isFlight: boolean) => {
+      const minTrips = Math.min(...feasible.map(v => vehicleStats.get(v.id)!.tripCount));
+      let candidates = feasible.filter(v => vehicleStats.get(v.id)!.tripCount === minTrips);
+      if (candidates.length === 1) return candidates[0];
+      // 历史轮换权重：趟次相同时，优先选历史累计趟次少的车
+      const storedHist = localStorage.getItem(STORAGE_KEYS.VEHICLE_STATS);
+      if (storedHist) {
+        const histStats: Record<string, number> = JSON.parse(storedHist);
+        const minHist = Math.min(...candidates.map(v => histStats[v.id] || 0));
+        candidates = candidates.filter(v => (histStats[v.id] || 0) === minHist);
+        if (candidates.length === 1) return candidates[0];
+      }
+      // 类型均衡：趟次和历史都相同时，选该交通类型任务最少的车
+      let best = candidates[0], bestType = Infinity;
+      for (const v of candidates) {
+        const s = vehicleStats.get(v.id)!;
+        const tc = isFlight ? s.flightCount : s.trainCount;
+        if (tc < bestType) { bestType = tc; best = v; }
+      }
+      return best;
+    };
+
+    // --- 辅助：创建任务对象 ---
+    const createTask = (
+      vehicleId: string, group: CustomerGroup,
+      pickupTimeMinutes: number, tripDuration: number,
+      arrHour: number, arrMin: number,
+      tripNumber: number,
+    ): ScheduleTask => ({
+      id: generateId(),
+      vehicleId,
+      customerGroupId: group.id,
+      customers: group.customers,
+      pickupLocation: group.pickupLocation,
+      pickupTime: formatTimeFromMinutes(pickupTimeMinutes, group.arrivalDate),
+      arrivalTime: `${String(arrHour).padStart(2, '0')}:${String(arrMin).padStart(2, '0')}`,
+      returnTime: formatTimeFromMinutes(pickupTimeMinutes + tripDuration, group.arrivalDate),
+      tripNumber,
+      status: 'pending',
+    });
+
+    // ===== 第一阶段：贪心分配 =====
     for (const group of sortedGroups) {
-      // 出发提前量：飞机60分钟，高铁40分钟
       const departureLeadTime = group.transportType === '飞机'
         ? SCHEDULE_CONFIG.flightDepartureLeadTime
         : SCHEDULE_CONFIG.trainDepartureLeadTime;
-      
-      // 完整往返耗时：用于计算趟次间隔（飞机150分钟，高铁100分钟）
       const tripDuration = group.transportType === '飞机'
         ? SCHEDULE_CONFIG.flightPickupDuration
         : SCHEDULE_CONFIG.trainPickupDuration;
-
-      // 计算出发时间和返回时间
       const [arrHour, arrMin] = group.arrivalTime.split(':').map(Number);
-      const arrivalMinutes = arrHour * 60 + arrMin;
-      const pickupTimeMinutes = arrivalMinutes - departureLeadTime;  // 出发时间 = 到达时间 - 出发提前量
-      // 返回时间 = 出发时间 + 完整往返耗时（趟次间隔）
-      const returnTimeMinutes = pickupTimeMinutes + tripDuration;
+      const pickupTimeMinutes = arrHour * 60 + arrMin - departureLeadTime;
+      const isFlight = group.transportType === '飞机';
 
-      // 为每辆车分配任务
       for (let i = 0; i < group.vehicleCount; i++) {
-        // 找到所有时间上可行的车辆
-        const feasibleVehicles: typeof availableVehicles = [];
-        
-        for (const vehicle of availableVehicles) {
-          const stats = vehicleStats.get(vehicle.id)!;
-          
-          // 检查趟次上限
-          if (stats.tripCount >= SCHEDULE_CONFIG.maxTripsPerVehicle) continue;
-
-          // 检查时间间隔 - 需要与时间上最近的前后任务都检查
-          const vehicleTasks = newTasks.filter(t => t.vehicleId === vehicle.id);
-          let timeIntervalOk = true;
-          if (vehicleTasks.length > 0) {
-            // 将已有任务的出发时间转为分钟数
-            const existingPickupMinutes = vehicleTasks.map(t => {
-              const parts = t.pickupTime.split(' ');
-              const timePart = parts[parts.length - 1];
-              const [h, m] = timePart.split(':').map(Number);
-              return {
-                minutes: h * 60 + m,
-                duration: t.customers.some(c => c.transportType === '飞机')
-                  ? SCHEDULE_CONFIG.flightPickupDuration
-                  : SCHEDULE_CONFIG.trainPickupDuration,
-              };
-            });
-
-            // 找出当前任务时间之前的最近一趟（后向检查）
-            // 当前出发时间 - 前一趟出发时间 >= 前一趟往返耗时
-            const earlierTasks = existingPickupMinutes
-              .filter(t => t.minutes <= pickupTimeMinutes)
-              .sort((a, b) => b.minutes - a.minutes); // 最近的排前面
-            
-            if (earlierTasks.length > 0) {
-              const nearestEarlier = earlierTasks[0];
-              if (pickupTimeMinutes - nearestEarlier.minutes < nearestEarlier.duration) {
-                timeIntervalOk = false;
-              }
-            }
-
-            // 找出当前任务时间之后的最近一趟（前向检查）
-            // 后一趟出发时间 - 当前出发时间 >= 当前往返耗时
-            if (timeIntervalOk) {
-              const laterTasks = existingPickupMinutes
-                .filter(t => t.minutes > pickupTimeMinutes)
-                .sort((a, b) => a.minutes - b.minutes); // 最近的排前面
-              
-              if (laterTasks.length > 0) {
-                const nearestLater = laterTasks[0];
-                if (nearestLater.minutes - pickupTimeMinutes < tripDuration) {
-                  timeIntervalOk = false;
-                }
-              }
-            }
-          }
-
-          if (timeIntervalOk) {
-            feasibleVehicles.push(vehicle);
-          }
+        const feasible: typeof availableVehicles = [];
+        for (const v of availableVehicles) {
+          const s = vehicleStats.get(v.id)!;
+          if (s.tripCount >= SCHEDULE_CONFIG.maxTripsPerVehicle) continue;
+          if (!isTimeWindowOk(v.id, pickupTimeMinutes, tripDuration, newTasks)) continue;
+          feasible.push(v);
         }
-
-        if (feasibleVehicles.length === 0) break;
-
-        // 选择策略：优先选择趟数最少的车辆（趟次均衡优先）
-        // 在趟数相同的情况下，考虑交通类型均衡
-        const isFlight = group.transportType === '飞机';
-        
-        // 按趟数排序，找出最小趟数
-        const minTrips = Math.min(...feasibleVehicles.map(v => vehicleStats.get(v.id)!.tripCount));
-        
-        // 筛选出趟数等于最小趟数的车辆
-        const minTripVehicles = feasibleVehicles.filter(v => 
-          vehicleStats.get(v.id)!.tripCount === minTrips
-        );
-
-        let selectedVehicle: typeof availableVehicles[0];
-        
-        if (minTripVehicles.length === 1) {
-          // 只有一个趟数最少的，直接选择
-          selectedVehicle = minTripVehicles[0];
-        } else {
-          // 多个趟数相同的，选择类型更均衡的
-          // 对于当前任务类型，选择该类型任务最少的车辆
-          let minTypeCount = Infinity;
-          selectedVehicle = minTripVehicles[0];
-          
-          for (const v of minTripVehicles) {
-            const stats = vehicleStats.get(v.id)!;
-            const typeCount = isFlight ? stats.flightCount : stats.trainCount;
-            if (typeCount < minTypeCount) {
-              minTypeCount = typeCount;
-              selectedVehicle = v;
-            }
-          }
-        }
-
-        // 更新统计
-        const stats = vehicleStats.get(selectedVehicle.id)!;
-        stats.tripCount += 1;
-        if (group.transportType === '飞机') {
-          stats.flightCount += 1;
-        } else {
-          stats.trainCount += 1;
-        }
-
-        const task: ScheduleTask = {
-          id: generateId(),
-          vehicleId: selectedVehicle.id,
-          customerGroupId: group.id,
-          customers: group.customers,
-          pickupLocation: group.pickupLocation,
-          pickupTime: formatTimeFromMinutes(pickupTimeMinutes, group.arrivalDate),
-          arrivalTime: `${String(arrHour).padStart(2, '0')}:${String(arrMin).padStart(2, '0')}`,
-          returnTime: formatTimeFromMinutes(returnTimeMinutes, group.arrivalDate),
-          tripNumber: stats.tripCount,
-          status: 'pending',
-        };
-        newTasks.push(task);
+        if (feasible.length === 0) break;
+        const selected = pickBestVehicle(feasible, isFlight);
+        const s = vehicleStats.get(selected.id)!;
+        s.tripCount++;
+        if (isFlight) s.flightCount++; else s.trainCount++;
+        newTasks.push(createTask(selected.id, group, pickupTimeMinutes, tripDuration, arrHour, arrMin, s.tripCount));
       }
-
       group.scheduled = true;
     }
+
+    // 更新 group.scheduled（只标记全部排完的）
+    const groupTaskCount = new Map<string, number>();
+    newTasks.forEach(t => groupTaskCount.set(t.customerGroupId, (groupTaskCount.get(t.customerGroupId) || 0) + 1));
+    for (const group of sortedGroups) {
+      group.scheduled = (groupTaskCount.get(group.id) || 0) >= group.vehicleCount;
+    }
+
+    const beforeRebalance = newTasks.length;
+    const tripDistBefore: Record<number, number> = {};
+    vehicleStats.forEach(s => { tripDistBefore[s.tripCount] = (tripDistBefore[s.tripCount] || 0) + 1; });
+    console.log('[排班v3] 贪心阶段完成，总趟数:', beforeRebalance, '分布:', JSON.stringify(tripDistBefore));
+
+    // ===== 第二阶段：重平衡 =====
+    // 从趟数最多的车往趟数最少的车转移任务，最多尝试 5 轮
+    const MAX_REBALANCE_ROUNDS = 5;
+    for (let round = 0; round < MAX_REBALANCE_ROUNDS; round++) {
+      const tripsPerVehicle = new Map<string, number>();
+      vehicleStats.forEach((s, vid) => tripsPerVehicle.set(vid, s.tripCount));
+      const maxTrips = Math.max(...tripsPerVehicle.values());
+      const minTrips = Math.min(...tripsPerVehicle.values());
+      if (maxTrips - minTrips <= 1) {
+        console.log(`[排班v3] 重平衡第${round}轮：已均衡 (max=${maxTrips}, min=${minTrips})，停止`);
+        break;
+      }
+
+      const overloaded = [...tripsPerVehicle.entries()]
+        .filter(([_vid, c]) => c === maxTrips)
+        .map(([vid]) => vid);
+      const underloaded = [...tripsPerVehicle.entries()]
+        .filter(([_vid, c]) => c <= minTrips)
+        .map(([vid]) => vid);
+
+      let movedThisRound = 0;
+
+      for (const fromVid of overloaded) {
+        if (movedThisRound >= underloaded.length) break;
+        // 找到这辆车的最后一个任务（最后面的最容易转移）
+        const fromTasks = newTasks
+          .filter(t => t.vehicleId === fromVid)
+          .sort((a, b) => newTasks.indexOf(a) - newTasks.indexOf(b));
+        if (fromTasks.length === 0) continue;
+
+        const lastTask = fromTasks[fromTasks.length - 1];
+
+        // 解析任务时间
+        const lastPickupParts = lastTask.pickupTime.split(' ');
+        const lastTimeStr = lastPickupParts[lastPickupParts.length - 1];
+        const [lh, lm] = lastTimeStr.split(':').map(Number);
+        const lastPickupMin = lh * 60 + lm;
+        const lastDuration = lastTask.customers.some(c => c.transportType === '飞机')
+          ? SCHEDULE_CONFIG.flightPickupDuration
+          : SCHEDULE_CONFIG.trainPickupDuration;
+
+        // 尝试找一个趟数少且时间兼容的车
+        let bestTarget: string | null = null;
+        for (const toVid of underloaded) {
+          const toStats = vehicleStats.get(toVid)!;
+          if (toStats.tripCount >= SCHEDULE_CONFIG.maxTripsPerVehicle) continue;
+          // 在目标车的时间线上检查（先假装移除 from 车的这个任务）
+          const tasksWithoutThis = newTasks.filter(t => t.id !== lastTask.id);
+          if (isTimeWindowOk(toVid, lastPickupMin, lastDuration, tasksWithoutThis)) {
+            bestTarget = toVid;
+            break;
+          }
+        }
+        if (!bestTarget) continue;
+
+        // 执行转移
+        const toVid = bestTarget;
+        const toStats = vehicleStats.get(toVid)!;
+        const fromStats = vehicleStats.get(fromVid)!;
+        const isFlightTask = lastTask.customers.some(c => c.transportType === '飞机');
+
+        // 更新统计
+        fromStats.tripCount--;
+        if (isFlightTask) fromStats.flightCount--; else fromStats.trainCount--;
+        toStats.tripCount++;
+        if (isFlightTask) toStats.flightCount++; else toStats.trainCount++;
+
+        // 更新任务
+        lastTask.vehicleId = toVid;
+        lastTask.tripNumber = toStats.tripCount;
+
+        // 重新编号 from 车剩余任务
+        const fromRemaining = newTasks
+          .filter(t => t.vehicleId === fromVid)
+          .sort((a, b) => {
+            const pa = a.pickupTime.split(' ').pop()!;
+            const pb = b.pickupTime.split(' ').pop()!;
+            return pa.localeCompare(pb);
+          });
+        fromRemaining.forEach((t, idx) => { t.tripNumber = idx + 1; });
+
+        movedThisRound++;
+        console.log(`[排班v3] 重平衡: ${fromVid}(${fromStats.tripCount}趟) → ${toVid}(${toStats.tripCount}趟)`);
+      }
+
+      if (movedThisRound === 0) {
+        console.log(`[排班v3] 重平衡第${round}轮：无任务可转移，停止`);
+        break;
+      }
+    }
+
+    const tripDistAfter: Record<number, number> = {};
+    vehicleStats.forEach(s => { tripDistAfter[s.tripCount] = (tripDistAfter[s.tripCount] || 0) + 1; });
+    console.log('[排班v3] 最终分布:', JSON.stringify(tripDistAfter), '总趟数:', newTasks.length);
 
     // 清除旧排班任务，重新生成（重新排班 = 完全重算）
     saveScheduleTasks([]);
@@ -599,6 +670,15 @@ export function useAppData() {
 
     saveCustomers(updatedCustomers);
     saveScheduleTasks(newTasks);
+
+    // 累加本轮趟次到历史统计（跨排班公平轮换）
+    const histStats: Record<string, number> = JSON.parse(
+      localStorage.getItem(STORAGE_KEYS.VEHICLE_STATS) || '{}'
+    );
+    vehicleStats.forEach((stats, vid) => {
+      histStats[vid] = (histStats[vid] || 0) + stats.tripCount;
+    });
+    localStorage.setItem(STORAGE_KEYS.VEHICLE_STATS, JSON.stringify(histStats));
 
     // 统计延误和取消客户
     const delayedInSchedule = newTasks.filter(t =>
