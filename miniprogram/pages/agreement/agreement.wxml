@@ -1,0 +1,97 @@
+<!--pages/agreement/agreement.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">用户服务协议</text>
+    <text class="subtitle">更新日期：2026年6月9日</text>
+    <text class="subtitle">生效日期：2026年6月9日</text>
+  </view>
+
+  <view class="content">
+    <view class="section">
+      <view class="section-title">一、总则</view>
+      <view class="text">
+        1.1 本协议是您与「调度通知系统」（以下简称"本小程序"）之间就使用本小程序服务所订立的协议。
+        <view style="margin-top:12rpx;">1.2 您使用本小程序即表示您已阅读、理解并同意接受本协议的约束。如果您不同意本协议的任何内容，请立即停止使用本小程序。</view>
+        <view style="margin-top:12rpx;">1.3 本小程序运营方保留随时修改本协议的权利，修改后的协议将在本小程序内公布，继续使用即视为同意修订后的协议。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">二、服务说明</view>
+      <view class="text">
+        <view>2.1 本小程序为商务车调度通知平台，主要提供以下功能：</view>
+        <view>- 行程派车通知推送</view>
+        <view>- 查看排班任务信息</view>
+        <view>- 订阅消息管理</view>
+
+        <view style="margin-top:16rpx;">2.2 用户角色分为：</view>
+        <view>- 司机：接收派车任务通知，执行接送任务</view>
+        <view>- 业务员：查看行程安排，接收相关通知</view>
+
+        <view style="margin-top:16rpx;">2.3 本小程序通过微信订阅消息向用户发送派车任务通知，需要用户主动授权。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">三、账号注册与使用</view>
+      <view class="text">
+        <view>3.1 用户使用微信授权登录本小程序，需提供真实有效的姓名和手机号码。</view>
+        <view style="margin-top:10rpx;">3.2 用户应妥善保管自己的账号信息，因用户自身原因导致的账号安全问题由用户自行承担。</view>
+        <view style="margin-top:10rpx;">3.3 禁止将账号借给他人使用或用于任何非法用途。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">四、用户行为规范</view>
+      <view class="text">
+        <view>4.1 用户在使用本小程序时应遵守中华人民共和国相关法律法规：</view>
+        <view>- 不得利用本小程序从事违法违规活动</view>
+        <view>- 不得干扰破坏本小程序的正常运行</view>
+        <view>- 不得传播违法或不良信息</view>
+
+        <view style="margin-top:16rpx;">4.2 如发现用户有违规行为，运营方有权暂停或终止其使用权限。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">五、知识产权</view>
+      <view class="text">
+        <view>5.1 本小程序的所有内容（包括但不限于界面设计、文字、图片、程序代码等）均受著作权法保护。</view>
+        <view style="margin-top:10rpx;">5.2 未经书面授权，任何人不得复制、传播、展示本小程序的内容。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">六、免责声明</view>
+      <view class="text">
+        <view>6.1 因不可抗力因素导致的服务中断或延迟，运营方不承担责任。</view>
+        <view style="margin-top:10rpx;">6.2 运营方不对因网络问题、设备故障等非运营方原因导致的服务异常负责。</view>
+        <view style="margin-top:10rpx;">6.3 推送消息可能受微信平台规则影响，存在延迟或无法送达的情况，运营方不承担相应责任。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">七、协议终止</view>
+      <view class="text">
+        <view>7.1 用户可以停止使用本小程序并注销账户来终止本协议。</view>
+        <view style="margin-top:10rpx;">7.2 如用户违反本协议规定，运营方有权终止提供服务。</view>
+        <view style="margin-top:10rpx;">7.3 协议终止后，运营方将在合理期限内删除您的个人信息数据。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">八、争议解决</view>
+      <view class="text">
+        本协议的解释和执行均适用中华人民共和国法律。如有争议，双方协商解决；协商不成时，可向运营方所在地人民法院提起诉讼。
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">九、联系我们</view>
+      <view class="text">
+        小程序名称：调度通知系统
+        运营方：白云巴士客运公司
+      </view>
+    </view>
+  </view>
+</view>

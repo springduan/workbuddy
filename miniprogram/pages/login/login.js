@@ -7,7 +7,9 @@ Page({
     phone: '',
     role: 'salesperson', // 默认业务员
     loading: false,
-    pendingUser: null // 登录成功后暂存用户信息
+    pendingUser: null, // 登录成功后暂存用户信息
+    agreed: false, // 是否同意隐私协议
+    logoError: false // Logo 图片是否加载失败
   },
 
   onNameInput(e) {
@@ -22,8 +24,33 @@ Page({
     this.setData({ role: e.currentTarget.dataset.role })
   },
 
+  // 切换协议勾选
+  toggleAgreement() {
+    this.setData({ agreed: !this.data.agreed })
+  },
+
+  // 跳转隐私政策
+  goPrivacy() {
+    wx.navigateTo({ url: '/pages/privacy/privacy' })
+  },
+
+  // 跳转用户服务协议
+  goAgreement() {
+    wx.navigateTo({ url: '/pages/agreement/agreement' })
+  },
+
+  // Logo 图片加载失败时隐藏（不影响页面渲染）
+  onLogoError() {
+    this.setData({ logoError: true })
+  },
+
   onLogin() {
-    const { name, phone, role } = this.data
+    const { name, phone, role, agreed } = this.data
+
+    if (!agreed) {
+      wx.showToast({ title: '请先阅读并同意《隐私政策》和《用户服务协议》', icon: 'none' })
+      return
+    }
 
     // 基础校验
     if (!name.trim()) {
@@ -41,10 +68,8 @@ Page({
     wx.login({
       success: (loginRes) => {
         const code = loginRes.code
-        console.log('微信code:', code)
 
         const requestUrl = `${app.globalData.serverUrl}/api/user/register`
-        console.log('请求URL:', requestUrl)
 
         // 第二步：发送到后端换取 openid 并注册用户
         wx.request({
@@ -161,14 +186,12 @@ Page({
             }, 1500)
           },
           fail: () => {
-            // 订阅状态通知失败也继续跳转
             wx.reLaunch({ url: '/pages/index/index' })
           }
         })
       },
       fail: (err) => {
         console.error('订阅消息失败', err)
-        // 订阅失败也继续跳转
         wx.showModal({
           title: '提示',
           content: '订阅失败，仍可登录。您可以在首页重新授权。',

@@ -64,8 +64,11 @@ function hashPassword(password) {
 app.use(cors({
   origin: [
     'https://bybus.asia',
+    'https://www.bybus.asia',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
   ],
@@ -177,22 +180,47 @@ app.get('/api/tasks', (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE openid = ?').get(openid)
 
   // 格式化给小程序使用
-  const formatted = tasks.map(t => ({
-    id: t.id,
-    date: t.task_date,
-    departureTime: t.departure_time,
-    customerName: t.customer_name,
-    customerPhone: t.customer_phone,
-    flightInfo: t.flight_info,
-    destination: t.destination,
-    vehiclePlate: t.vehicle_plate,
-    driverName: t.driver_name,
-    driverPhone: t.driver_phone,
-    salespersonName: t.salesperson_name,
-    salespersonPhone: t.salesperson_phone,
-    status: t.status,
-    statusText: t.status === 'normal' ? '正常' : t.status === 'delay' ? '延误' : '取消'
-  }))
+  // 司机/业务员信息优先从 users 表查询真实注册数据（fallback 到 task_notifications 表）
+  const formatted = tasks.map(t => {
+    // 从 users 表查询司机的真实姓名
+    let realDriverName = t.driver_name
+    let realDriverPhone = t.driver_phone
+    if (t.driver_phone) {
+      const drv = db.prepare('SELECT name, phone FROM users WHERE phone = ? AND role = ?').get(t.driver_phone, 'driver')
+      if (drv) {
+        realDriverName = drv.name
+        realDriverPhone = drv.phone
+      }
+    }
+
+    // 从 users 表查询业务员的真实姓名
+    let realSalespersonName = t.salesperson_name
+    let realSalespersonPhone = t.salesperson_phone
+    if (t.salesperson_phone) {
+      const sal = db.prepare('SELECT name, phone FROM users WHERE phone = ? AND role = ?').get(t.salesperson_phone, 'salesperson')
+      if (sal) {
+        realSalespersonName = sal.name
+        realSalespersonPhone = sal.phone
+      }
+    }
+
+    return {
+      id: t.id,
+      date: t.task_date,
+      departureTime: t.departure_time,
+      customerName: t.customer_name,
+      customerPhone: t.customer_phone,
+      flightInfo: t.flight_info,
+      destination: t.destination,
+      vehiclePlate: t.vehicle_plate,
+      driverName: realDriverName,
+      driverPhone: realDriverPhone,
+      salespersonName: realSalespersonName,
+      salespersonPhone: realSalespersonPhone,
+      status: t.status,
+      statusText: t.status === 'normal' ? '正常' : t.status === 'delay' ? '延误' : '取消'
+    }
+  })
 
   res.json({ success: true, data: formatted, user: user ? {
     openid: user.openid,
@@ -326,12 +354,14 @@ app.post('/api/notify', async (req, res) => {
           db.prepare(`
             INSERT INTO task_notifications
             (task_id, openid, task_date, customer_name, customer_phone, flight_info,
-             destination, departure_time, vehicle_plate, salesperson_name, salesperson_phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal')
+             destination, departure_time, vehicle_plate, driver_name, driver_phone,
+             salesperson_name, salesperson_phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal')
           `).run(
             task.taskId, driver.openid, task.date,
             task.customerName, task.customerPhone, task.flightInfo,
             task.destination, task.departureTime, task.vehiclePlate,
+            driver?.name, task.driverPhone,
             salesperson?.name, task.salespersonPhone
           )
 
@@ -378,13 +408,15 @@ app.post('/api/notify', async (req, res) => {
           db.prepare(`
             INSERT INTO task_notifications
             (task_id, openid, task_date, customer_name, customer_phone, flight_info,
-             destination, departure_time, vehicle_plate, driver_name, driver_phone, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal')
+             destination, departure_time, vehicle_plate, driver_name, driver_phone,
+             salesperson_name, salesperson_phone, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal')
           `).run(
             task.taskId, salesperson.openid, task.date,
             task.customerName, task.customerPhone, task.flightInfo,
             task.destination, task.departureTime, task.vehiclePlate,
-            driver?.name, task.driverPhone
+            driver?.name, task.driverPhone,
+            salesperson?.name, task.salespersonPhone
           )
 
           db.prepare(`INSERT INTO push_logs (task_id, openid, success) VALUES (?, ?, 1)`)

@@ -47,18 +47,22 @@
       </view>
     </view>
     <view class="task-body">
-      <view class="task-row">
-        <text class="task-icon">🧳</text>
-        <text class="task-text">{{item.customerName}} {{item.customerPhone}}</text>
+      <!-- 司机信息 -->
+      <view class="task-row" wx:if="{{item.driverName || item.driverPhone}}">
+        <text class="task-icon">👨‍✈️</text>
+        <text class="task-text">司机：{{item.driverName || '未登记'}} {{item.driverPhone}}</text>
       </view>
-      <view class="task-row">
+      <!-- 业务员信息 -->
+      <view class="task-row" wx:if="{{item.salespersonName || item.salespersonPhone}}">
+        <text class="task-icon">💼</text>
+        <text class="task-text">业务员：{{item.salespersonName || '未登记'}} {{item.salespersonPhone}}</text>
+      </view>
+      <!-- 航班/高铁信息 -->
+      <view class="task-row" wx:if="{{item.flightInfo}}">
         <text class="task-icon">✈️</text>
-        <text class="task-text">{{item.flightInfo}} {{item.destination}}</text>
+        <text class="task-text">航班/高铁：{{item.flightInfo}}</text>
       </view>
-      <view class="task-row" wx:if="{{item.contactName}}">
-        <text class="task-icon">📞</text>
-        <text class="task-text">联系人：{{item.contactName}} {{item.contactPhone}}</text>
-      </view>
+      <!-- 车辆信息 -->
       <view class="task-row" wx:if="{{item.vehiclePlate}}">
         <text class="task-icon">🚗</text>
         <text class="task-text">车牌：{{item.vehiclePlate}}</text>

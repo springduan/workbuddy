@@ -1,7 +1,8 @@
 <!-- pages/login/login.wxml -->
 <view class="container">
   <view class="logo-area">
-    <image class="logo" src="/images/logo.png" mode="aspectFit" />
+    <image wx:if="{{!logoError}}" class="logo" src="/images/logo.png" mode="aspectFit" binderror="onLogoError" />
+    <view wx:else class="logo logo-placeholder">🚌</view>
     <text class="title">调度通知系统</text>
     <text class="subtitle">商务车调度平台</text>
   </view>
@@ -46,7 +47,22 @@
     </view>
   </view>
 
-  <button class="btn-primary" bindtap="onLogin" loading="{{loading}}">
+  <!-- 隐私协议勾选 -->
+  <view class="agreement-area" bindtap="toggleAgreement">
+    <view class="checkbox-wrap {{agreed ? 'checked' : ''}}">
+      <view class="checkbox-icon {{agreed ? 'icon-checked' : 'icon-unchecked'}}">
+        <text wx:if="{{agreed}}" class="check-mark">✓</text>
+      </view>
+    </view>
+    <view class="agreement-text">
+      <text>我已阅读并同意</text>
+      <text class="link" catchtap="goPrivacy">《隐私政策》</text>
+      <text>和</text>
+      <text class="link" catchtap="goAgreement">《用户服务协议》</text>
+    </view>
+  </view>
+
+  <button class="btn-primary {{!agreed ? 'btn-disabled' : ''}}" bindtap="onLogin" loading="{{loading}}" disabled="{{!agreed}}">
     登录
   </button>
 

@@ -449,6 +449,19 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                                   <div key={c.id} className="text-sm">
                                     <div className="flex items-center gap-1">
                                       <span>{c.name} ({c.peopleCount}人)</span>
+                                      {/* 分车标识：同一客户组分配到多辆车时显示 */}
+                                      {(() => {
+                                        const sameGroupTasks = filteredTasks.filter(t => t.customerGroupId === task.customerGroupId);
+                                        if (sameGroupTasks.length > 1) {
+                                          const myIndex = sameGroupTasks.findIndex(t => t.id === task.id) + 1;
+                                          return (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-200 font-medium">
+                                              分车{myIndex}/{sameGroupTasks.length}
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
                                       {c.guestStatus === 'delayed' && (
                                         <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 text-amber-700 text-xs rounded border border-amber-200">
                                           <AlertTriangle className="w-2.5 h-2.5" />
@@ -574,6 +587,19 @@ export function Schedule({ scheduleTasks, vehicles, customerGroups, onGenerateSc
                                       <div key={c.id}>
                                         <div className="flex items-center gap-1">
                                           <span>{c.name} · {c.flightNumber || '-'} · {c.peopleCount}人</span>
+                                          {/* 分车标识 */}
+                                          {(() => {
+                                            const sameGroupTasks = filteredTasks.filter(t => t.customerGroupId === task.customerGroupId);
+                                            if (sameGroupTasks.length > 1) {
+                                              const myIndex = sameGroupTasks.findIndex(t => t.id === task.id) + 1;
+                                              return (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-200 font-medium">
+                                                  分车{myIndex}/{sameGroupTasks.length}
+                                                </span>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
                                           {c.guestStatus === 'delayed' && (
                                             <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 text-amber-700 text-xs rounded border border-amber-200">
                                               <AlertTriangle className="w-2.5 h-2.5" />

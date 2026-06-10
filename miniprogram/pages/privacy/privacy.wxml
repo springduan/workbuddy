@@ -1,0 +1,105 @@
+<!--pages/privacy/privacy.wxml-->
+<view class="container">
+  <view class="header">
+    <text class="title">隐私政策</text>
+    <text class="subtitle">更新日期：2026年6月9日</text>
+    <text class="subtitle">生效日期：2026年6月9日</text>
+  </view>
+
+  <view class="content">
+    <view class="section">
+      <view class="section-title">引言</view>
+      <view class="text">
+        感谢您使用「调度通知系统」（以下简称"本小程序"）。我们深知个人信息对您的重要性，我们将按照法律法规要求，采取相应安全保护措施，尽力保护您的个人信息安全可控。请在使用我们的服务前，仔细阅读并充分理解本《隐私政策》。
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">一、我们如何收集和使用您的信息</view>
+      <view class="text">
+        <view class="bold">1. 手机号</view>
+        <view>收集目的：用于身份识别、接收派车任务推送通知、与调度人员联系。</view>
+        <view>收集方式：您在登录时主动填写。</view>
+        <view>使用用途：向您的微信发送行程派车订阅消息。</view>
+
+        <view class="bold" style="margin-top:20rpx;">2. 姓名</view>
+        <view>收集目的：用于标识用户身份，便于调度人员识别和分配任务。</view>
+        <view>收集方式：您在登录时主动填写。</view>
+        <view>使用用途：在排班系统和任务列表中显示您的身份信息。</view>
+
+        <view class="bold" style="margin-top:20rpx;">3. 身份角色（司机/业务员）</view>
+        <view>收集目的：确定您在本系统的使用权限和功能范围。</view>
+        <view>收集方式：您在登录时主动选择。</view>
+        <view>使用用途：根据您的角色提供相应的功能（如接收通知或查看任务）。</view>
+
+        <view class="bold" style="margin-top:20rpx;">4. 微信 OpenID</view>
+        <view>收集目的：用于唯一标识您的微信账号，关联您的用户数据。</view>
+        <view>收集方式：通过微信登录授权自动获取。</view>
+        <view>使用用途：作为用户唯一标识符存储在我们的系统中。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">二、我们如何使用 Cookie 和同类技术</view>
+      <view class="text">
+        本小程序不使用 Cookie 或同类技术。
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">三、我们如何共享、转让、公开披露您的信息</view>
+      <view class="text">
+        <view class="bold">1. 共享</view>
+        <view>除以下情形外，未经您同意，我们不会与任何第三方共享您的个人信息：</view>
+        <view>- 在获取明确同意的情况下共享：获得您的单独同意后，我们会与其他方共享您的个人信息。</view>
+        <view>- 根据法律法规要求：我们可能会根据法律法规规定，或按政府主管部门的强制性要求，对外共享您的个人信息。</view>
+
+        <view class="bold" style="margin-top:20rpx;">2. 转让</view>
+        <view>我们不会将您的个人信息转让给任何公司、组织和个人，但以下情况除外：</view>
+        <view>- 获得您的明确同意后进行转让。</view>
+        <view>- 根据适用的法律、法规、法律程序的要求等进行转让。</view>
+
+        <view class="bold" style="margin-top:20rpx;">3. 公开披露</view>
+        <view>我们仅会在获取您明确同意的情况下或基于法律规定的情况下公开披露您的个人信息。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">四、我们如何保存您的信息</view>
+      <view class="text">
+        <view>- 存储期限：您的个人信息将在您账户存续期间及账户注销后合理期限内保存。</view>
+        <view>- 存储地区：您的个人信息存储于中华人民共和国境内。</view>
+        <view>- 存储方式：采用加密方式保存在数据库中。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">五、您的权利</view>
+      <view class="text">
+        您拥有以下权利：
+        <view>- 访问您的个人信息；</view>
+        <view>- 更正您的个人信息；</view>
+        <view>- 删除您的个人信息；</view>
+        <view>- 注销账户并删除相关数据。</view>
+        <view style="margin-top:10rpx;">如需行使上述权利，请联系本小程序运营方。</view>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">六、未成年人保护</view>
+      <view class="text">
+        我们非常重视对未成年人个人信息的保护。若您是18周岁以下的未成年人，在使用我们的产品和服务前，应事先取得法定监护人的同意。
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section-title">七、联系我们</view>
+      <view class="text">
+        如您对本《隐私政策》有任何疑问、意见或建议，请通过以下方式与我们联系：
+        <view>小程序名称：调度通知系统</view>
+        <view>运营方：白云巴士客运公司</view>
+        <view>如需行使您的个人信息权利或注销账户，请联系本系统管理员。</view>
+      </view>
+    </view>
+  </view>
+</view>

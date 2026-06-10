@@ -1,14 +1,1 @@
-{
-  "pages": [
-    "pages/login/login",
-    "pages/index/index"
-  ],
-  "window": {
-    "backgroundTextStyle": "light",
-    "navigationBarBackgroundColor": "#1a56db",
-    "navigationBarTitleText": "调度通知",
-    "navigationBarTextStyle": "white"
-  },
-  "style": "v2",
-  "sitemapLocation": "sitemap.json"
-}
+{"pages": ["pages/login/login", "pages/index/index", "pages/privacy/privacy", "pages/agreement/agreement"], "window": {"backgroundTextStyle": "light", "navigationBarBackgroundColor": "#1a56db", "navigationBarTitleText": "调度通知", "navigationBarTextStyle": "white"}, "style": "v2", "sitemapLocation": "sitemap.json"}

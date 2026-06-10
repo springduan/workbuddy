@@ -4,7 +4,7 @@ App({
     userInfo: null,
     openid: null,
     role: null, // 'driver' 司机 | 'salesperson' 业务员
-    serverUrl: 'http://127.0.0.1:3000' // 开发时用本机IP
+    serverUrl: 'https://bybus.asia' // 生产环境
   },
 
   onLaunch() {

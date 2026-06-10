@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +44,8 @@ export function DashboardKanban({
   const [viewMode, setViewMode] = useState<ViewMode>('gantt');
   // 任务执行视图的状态筛选
   const [executionFilter, setExecutionFilter] = useState<ExecutionFilter>('all');
+  // 甘特图点击跳转的高亮任务 ID
+  const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   // 搜索词
   const [searchTerm, setSearchTerm] = useState('');
   // 业务员筛选
@@ -207,6 +209,18 @@ export function DashboardKanban({
     onUpdateTaskStatus(taskId, newStatus);
   };
 
+  // 甘特图点击 → 跳转到任务执行视图并高亮对应任务
+  const handleGanttTaskClick = (taskId: string) => {
+    setHighlightedTaskId(taskId);
+    setExecutionFilter('all');
+    setViewMode('execution');
+  };
+
+  // 清除高亮（用户手动操作时）
+  const clearHighlight = () => {
+    setHighlightedTaskId(null);
+  };
+
   // 判断任务是否超期（当前时间已过出发时间但仍为 pending）
   const isOverdue = (task: ScheduleTask) => {
     if (task.status !== 'pending') return false;
@@ -347,6 +361,7 @@ export function DashboardKanban({
             timeSlots={timeSlots}
             formatHour={formatHour}
             getTaskStyle={getTaskStyle}
+            onTaskClick={handleGanttTaskClick}
           />
         </div>
 
@@ -363,6 +378,8 @@ export function DashboardKanban({
             filter={executionFilter}
             onFilterChange={setExecutionFilter}
             onNotify={handleOpenNotify}
+            highlightedTaskId={highlightedTaskId}
+            onClearHighlight={clearHighlight}
           />
         </div>
       </Tabs>
@@ -423,12 +440,14 @@ function GanttView({
   timeSlots,
   formatHour,
   getTaskStyle,
+  onTaskClick,
 }: {
   vehicles: Vehicle[];
   tasksByVehicle: Record<string, ScheduleTask[]>;
   timeSlots: number[];
   formatHour: (hour: number) => string;
   getTaskStyle: (task: ScheduleTask) => { left: string; width: string };
+  onTaskClick?: (taskId: string) => void;
 }) {
   // 获取车辆序号（基于车辆管理列表顺序）
   const getVehicleIndex = (vehicleId: string) => {
@@ -523,6 +542,10 @@ function GanttView({
                                       width: style.width,
                                       minWidth: '40px',
                                     }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onTaskClick?.(task.id);
+                                    }}
                                   >
                                     <div className="text-white text-xs font-medium truncate">
                                       {task.customers[0]?.flightNumber ||
@@ -581,6 +604,8 @@ function ExecutionView({
   filter,
   onFilterChange,
   onNotify,
+  highlightedTaskId,
+  onClearHighlight,
 }: {
   vehicles: Vehicle[];
   tasksByVehicle: Record<string, ScheduleTask[]>;
@@ -592,7 +617,12 @@ function ExecutionView({
   filter: ExecutionFilter;
   onFilterChange: (filter: ExecutionFilter) => void;
   onNotify: (task: ScheduleTask, vehicle: Vehicle) => void;
+  highlightedTaskId?: string | null;
+  onClearHighlight?: () => void;
 }) {
+  // 扁平化所有任务（用于 TaskRow 中的分车标识计算）
+  const allTasks = useMemo(() => Object.values(tasksByVehicle).flat(), [tasksByVehicle]);
+
   // 过滤出有任务的车辆并排序
   const activeVehicles = useMemo(() => {
     return vehicles
@@ -608,6 +638,23 @@ function ExecutionView({
       .filter((item) => item.tasks.length > 0)
       .sort((a, b) => a.tasks[0]?.tripNumber - b.tasks[0]?.tripNumber);
   }, [vehicles, tasksByVehicle, filter]);
+
+  // 甘特图跳转后自动滚动到高亮任务
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (highlightedTaskId) {
+      // 延迟滚动，等待 DOM 渲染完成
+      scrollTimerRef.current = setTimeout(() => {
+        const el = document.getElementById(`task-row-${highlightedTaskId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    }
+    return () => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, [highlightedTaskId]);
 
   return (
     <div className="space-y-4">
@@ -681,9 +728,11 @@ function ExecutionView({
               vehicle={vehicle}
               vehicleIndex={vehicles.findIndex(v => v.id === vehicle.id) + 1}
               tasks={tasks}
+              allTasks={allTasks}
               onStatusChange={onStatusChange}
               isOverdue={isOverdue}
               onNotify={onNotify}
+              highlightedTaskId={highlightedTaskId}
             />
           ))}
         </div>
@@ -751,16 +800,20 @@ function VehicleTaskCard({
   vehicle,
   vehicleIndex,
   tasks,
+  allTasks,
   onStatusChange,
   isOverdue,
   onNotify,
+  highlightedTaskId,
 }: {
   vehicle: Vehicle;
   vehicleIndex: number;
   tasks: ScheduleTask[];
+  allTasks: ScheduleTask[];
   onStatusChange: (taskId: string, newStatus: ScheduleTask['status']) => void;
   isOverdue: (task: ScheduleTask) => boolean;
   onNotify: (task: ScheduleTask, vehicle: Vehicle) => void;
+  highlightedTaskId?: string | null;
 }) {
   // 计算完成进度
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
@@ -818,9 +871,11 @@ function VehicleTaskCard({
             key={task.id}
             task={task}
             index={idx + 1}
+            allTasks={allTasks}
             onStatusChange={onStatusChange}
             isOverdue={isOverdue(task)}
             onNotify={() => onNotify(task, vehicle)}
+            isHighlighted={highlightedTaskId === task.id}
           />
         ))}
       </div>
@@ -832,15 +887,19 @@ function VehicleTaskCard({
 function TaskRow({
   task,
   index,
+  allTasks,
   onStatusChange,
   isOverdue,
   onNotify,
+  isHighlighted,
 }: {
   task: ScheduleTask;
   index: number;
+  allTasks: ScheduleTask[];
   onStatusChange: (taskId: string, newStatus: ScheduleTask['status']) => void;
   isOverdue: boolean;
   onNotify: () => void;
+  isHighlighted?: boolean;
 }) {
   const isFlight = task.customers[0]?.transportType === '飞机';
   const hasDelayed = task.customers.some(
@@ -849,14 +908,17 @@ function TaskRow({
 
   return (
     <div
-      className={`p-3 sm:p-4 transition-colors ${
-        task.status === 'completed'
-          ? 'bg-green-50/50'
-          : task.status === 'in_progress'
-            ? 'bg-blue-50/50'
-            : isOverdue
-              ? 'bg-red-50/50'
-              : ''
+      id={`task-row-${task.id}`}
+      className={`p-3 sm:p-4 transition-all ${
+        isHighlighted
+          ? 'bg-yellow-50 ring-2 ring-yellow-400 ring-inset rounded-md shadow-[0_0_12px_rgba(250,204,21,0.4)]'
+          : task.status === 'completed'
+            ? 'bg-green-50/50'
+            : task.status === 'in_progress'
+              ? 'bg-blue-50/50'
+              : isOverdue
+                ? 'bg-red-50/50'
+                : ''
       }`}
     >
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -936,15 +998,27 @@ function TaskRow({
 
           {/* 客户列表 */}
           <div className="flex flex-wrap gap-1 pl-1">
-            {task.customers.map((c) => (
+            {task.customers.map((c) => {
+              // 计算分车标识
+              const sameGroupTasks = allTasks.filter(t => t.customerGroupId === task.customerGroupId);
+              const splitLabel = sameGroupTasks.length > 1
+                ? `分车${sameGroupTasks.findIndex(t => t.id === task.id) + 1}/${sameGroupTasks.length}`
+                : null;
+              return (
               <span
                 key={c.id}
                 className="inline-flex items-center gap-0.5 text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"
               >
                 <Users className="w-3 h-3 text-gray-400" />
                 {c.name} ({c.peopleCount}人)
+                {splitLabel && (
+                  <span className="ml-0.5 px-1 py-0 bg-purple-100 text-purple-700 rounded border border-purple-200 font-medium">
+                    {splitLabel}
+                  </span>
+                )}
               </span>
-            ))}
+              );
+            })}
           </div>
 
           {/* 业务员信息 — 卡片化展示 */}
